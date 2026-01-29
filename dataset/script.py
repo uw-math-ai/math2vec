@@ -31,6 +31,11 @@ for bp in BLUEPRINTS:
         for n in thms: 
             entry = {}
             entry["id"] = n["id"]
+            heading = n.select_one("div.thm_thmheading")
+
+            cap = heading.select_one('span[class$="_thmcaption"]')
+            kind = cap.get_text(strip=True).lower() if cap else None 
+            entry["kind"] = kind
 
             content = n.find("div", class_="thm_thmcontent").get_text(strip=True)
             entry["LaTeX"] = content
@@ -53,6 +58,8 @@ for bp in BLUEPRINTS:
                 #print(element.get_attribute("outerHTML"))
                 gh_link = element.find_element(By.CSS_SELECTOR, "div.gh_link a")
                 print(gh_link.get_attribute("href"))
+                github_response = requests.get(gh_link)
+                print(github_response)
 
             # WebDriverWait(driver, 100).until(
             #     EC.presence_of_element_located((By.TAG_NAME, "body"))
