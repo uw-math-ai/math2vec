@@ -6,6 +6,20 @@ This is the benchmark built for math2vec - a retrieval-focused text embedder eva
 
 A retrieval-focused benchmark evaluates how well an embedding model can encode text such that semantically similar items are close in the embedding space, enabling effective retrieval of relevant documents given a query.
 
+## Structure of Benchmarking Directory
+
+```
+benchmarking/
+├── README.md (this file)
+├── data/               # Datasets and ground truth
+├── src/
+│   ├── data.py         # Dataset loading and preprocessing
+│   ├── encoder.py      # Embedding model interface
+|   ├── evaluation.py   # Evaluation algorithm & report generator
+|   ├── metrics.py      # Evaluation metric functions
+│   └── retriever.py    # Similarity search and ranking
+```
+
 ### Core Components
 
 1. **Data Layer** - Corpus and query management
@@ -156,14 +170,3 @@ Leo's answer: Theorem-query retrieval, given a search query, retrieve relevant t
 
 ---
 
-## Current Directory Structure
-
-```
-benchmarking/
-├── README.md (this file)
-├── data/               # Datasets and ground truth
-├── src/
-│   ├── data.py         # Dataset loading and preprocessing
-│   ├── encoder.py      # Embedding model interface
-│   └── retriever.py    # Similarity search and ranking
-```
