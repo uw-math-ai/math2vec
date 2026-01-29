@@ -5,6 +5,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import time
 
 
 BLUEPRINTS = [
@@ -44,15 +45,22 @@ for bp in BLUEPRINTS:
             driver= webdriver.Chrome()
             
             driver.get(lean_url)
+            time.sleep(10)
+
+            if lean_decl:
+                print(lean_decl)
+                element = driver.find_element(By.ID, lean_decl)
+                #print(element.get_attribute("outerHTML"))
+                gh_link = element.find_element(By.CSS_SELECTOR, "div.gh_link a")
+                print(gh_link.get_attribute("href"))
 
             # WebDriverWait(driver, 100).until(
             #     EC.presence_of_element_located((By.TAG_NAME, "body"))
             # )
 
-            WebDriverWait(driver, 10).until(
-                lambda d: d.execute_script("return document.readyState") == "complete"
-            )
-            print("title " + driver.page_source)
+            # WebDriverWait(driver, 10).until(
+            #     lambda d: d.execute_script("return document.readyState") == "complete"
+            # )
 
 
             records.append(entry)
