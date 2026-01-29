@@ -57,9 +57,9 @@ for bp in BLUEPRINTS:
                 element = driver.find_element(By.ID, lean_decl)
                 #print(element.get_attribute("outerHTML"))
                 gh_link = element.find_element(By.CSS_SELECTOR, "div.gh_link a")
-                print(gh_link.get_attribute("href"))
+                gh_link = gh_link.get_attribute("href")
                 github_response = requests.get(gh_link)
-                print(github_response)
+                print(github_response.text)
 
             # WebDriverWait(driver, 100).until(
             #     EC.presence_of_element_located((By.TAG_NAME, "body"))
