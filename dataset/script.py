@@ -1,6 +1,10 @@
 import json
 import requests     
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 
 BLUEPRINTS = [
@@ -17,6 +21,8 @@ for bp in BLUEPRINTS:
         soup = BeautifulSoup(html_content, "html.parser")
         thms = soup.select("div.thm[id]")
 
+        # this is just to limit the thms for testing purposes 
+        # TODO: Remove Later 
         thms = [thms[0]]
 
 
@@ -35,6 +41,18 @@ for bp in BLUEPRINTS:
             entry["lean_decl"] = lean_decl
             
             # We need to use a headless browser to acess the lean_url and then acess the lean code and save it in the dict
+            driver= webdriver.Chrome()
+            
+            driver.get(lean_url)
+
+            # WebDriverWait(driver, 100).until(
+            #     EC.presence_of_element_located((By.TAG_NAME, "body"))
+            # )
+
+            WebDriverWait(driver, 10).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            print("title " + driver.page_source)
 
 
             records.append(entry)
