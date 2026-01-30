@@ -1,83 +1,150 @@
 import json
-import requests     
+import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+import re
+from urllib.parse import urlparse
 
 
 BLUEPRINTS = [
-   "https://leanprover-community.github.io/sphere-eversion/blueprint/dep_graph_document.html"
+    "https://leanprover-community.github.io/sphere-eversion/blueprint/dep_graph_document.html"
 ]
 
+OUTPUT_FILE = "blueprints.json"
+
+blueprint_records = []
+
 for bp in BLUEPRINTS:
-    response = requests.get(bp)
-    if response.status_code == 200:
-        html_content = response.text
+    try:
+        response = requests.get(bp)
+    except requests.RequestException as e:
+        print(f"Error fetching blueprint URL {bp}: {e}")
+        continue
+    if response.status_code != 200:
+        print(f"Error fetching blueprint URL {bp}: status {response.status_code}")
+        continue
+    html_content = response.text
+    
+
+    # Convert the html_content into a soup (easily searchable and parsable document) and then parse it into thms/nodes
+    soup = BeautifulSoup(html_content, "html.parser")
+    thms = soup.select("div.thm[id]")
+    if not thms:
+        print(f"Error: no theorem nodes found for blueprint {bp}")
+        continue
+
+    records = []
+    for n in thms: 
+        entry = {}
+        entry["id"] = n["id"]
+
+        thm_content = n.find("div", class_="thm_thmcontent")
+        if not thm_content:
+            print(f"Error: missing theorem content for id {n.get('id')}")
+            continue
+        entry["LaTeX"] = thm_content.get_text(strip=True)
+
+        lean_a = n.select_one("a.lean_link.lean_decl")
+        lean_url = lean_a["href"] if lean_a else None
+        if not lean_url:
+            print(f"Error: missing lean URL for id {n.get('id')}")
+            continue
+        lean_decl = lean_url.split("#doc/")[-1] if lean_url else None
+        entry["lean_url"] = lean_url
+        if not lean_decl:
+            print(f"Error: missing lean declaration for id {n.get('id')}")
+            continue
+        entry["lean_decl"] = lean_decl
         
-
-        # Convert the html_content into a soup (easily searchable and parsable document) and then parse it into thms/nodes
-        soup = BeautifulSoup(html_content, "html.parser")
-        thms = soup.select("div.thm[id]")
-
-        # this is just to limit the thms for testing purposes 
-        # TODO: Remove Later 
-        thms = [thms[0]]
-
-
-        records = []
-        for n in thms: 
-            entry = {}
-            entry["id"] = n["id"]
-
-            content = n.find("div", class_="thm_thmcontent").get_text(strip=True)
-            entry["LaTeX"] = content
-
-            lean_a = n.select_one("a.lean_link.lean_decl")
-            lean_url = lean_a["href"] if lean_a else None
-            lean_decl = lean_url.split("#doc/")[-1] if lean_url else None
-            entry["lean_link"] = lean_url
-            entry["lean_decl"] = lean_decl
-            
-            # We need to use a headless browser to acess the lean_url and then acess the lean code and save it in the dict
-            driver= webdriver.Chrome()
-            
+        # We need to use a headless browser to acess the lean_url and then acess the lean code and save it in the dict
+        try:
+            driver = webdriver.Chrome()
+        except Exception as e:
+            print(f"Error starting Chrome WebDriver: {e}")
+            break
+        try:
             driver.get(lean_url)
-            time.sleep(10)
+        except Exception as e:
+            print(f"Error loading lean URL {lean_url}: {e}")
+            driver.quit()
+            continue
+        time.sleep(5)
 
-            if lean_decl:
-                print(lean_decl)
-                element = driver.find_element(By.ID, lean_decl)
-                #print(element.get_attribute("outerHTML"))
-                gh_link = element.find_element(By.CSS_SELECTOR, "div.gh_link a")
-                print(gh_link.get_attribute("href"))
+        try:
+            element = driver.find_element(By.ID, lean_decl)
+        except Exception as e:
+            print(f"Error finding lean declaration element {lean_decl} at {lean_url}: {e}")
+            driver.quit()
+            continue
+        #print(element.get_attribute("outerHTML"))
+        try:
+            gh_link = element.find_element(By.CSS_SELECTOR, "div.gh_link a").get_attribute("href")
+        except Exception as e:
+            print(f"Error finding GitHub link for {lean_decl} at {lean_url}: {e}")
+            driver.quit()
+            continue
+        if not gh_link:
+            print(f"Error: empty GitHub link for {lean_decl} at {lean_url}")
+            driver.quit()
+            continue
+        entry["gh_link"] = gh_link
 
-            # WebDriverWait(driver, 100).until(
-            #     EC.presence_of_element_located((By.TAG_NAME, "body"))
-            # )
+        try:
+            driver.get(gh_link)
+        except Exception as e:
+            print(f"Error loading GitHub link {gh_link}: {e}")
+            driver.quit()
+            continue
+        time.sleep(5)
+        try:
+            gh_soup = BeautifulSoup(driver.page_source, "html.parser")
+        except Exception as e:
+            print(f"Error parsing GitHub page for {gh_link}: {e}")
+            driver.quit()
+            continue
 
-            # WebDriverWait(driver, 10).until(
-            #     lambda d: d.execute_script("return document.readyState") == "complete"
-            # )
+        parsed = urlparse(gh_link)
+        fragment = parsed.fragment
+        match = re.search(r"L(\d+)(?:-L(\d+))?", fragment)
+        if match:
+            start_line = int(match.group(1))
+            end_line = int(match.group(2) or match.group(1))
+            highlighted = []
+            for line_no in range(start_line, end_line + 1):
+                line_el = gh_soup.find(id=f"LC{line_no}")
+                if not line_el:
+                    line_el = gh_soup.find("div", attrs={"data-line-number": str(line_no)})
+                if line_el:
+                    line_text = line_el.get_text()
+                    highlighted.append(line_text.rstrip("\n"))
+                else:
+                    print(f"Error: missing line {line_no} in GitHub page {gh_link}")
+            entry["highlighted"] = "\n".join(highlighted)
+        else:
+            print(f"Error: missing line fragment in GitHub URL {gh_link}")
+            entry["highlighted"] = None
 
+        driver.quit()
 
-            records.append(entry)
+        records.append(entry)
 
+    blueprint_records.append(
+        {
+            "blueprint_url": bp,
+            "theorems": records,
+        }
+    )
 
-        
-
-
-
-
-        # filename = 'bp.json'
-        # try:
-        #     with open(filename, 'w') as json_file:
-        #         json.dump(records, json_file, indent=4)
-        #         print(f"Successfully saved dictionary to {filename}")
-        # except IOError as e:
-        #      print(f"Error saving file: {e}")
+try:
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as json_file:
+        json.dump(blueprint_records, json_file, indent=2)
+    print(f"Saved blueprint data to {OUTPUT_FILE}")
+except IOError as e:
+    print(f"Error saving file: {e}")
 
 
            
