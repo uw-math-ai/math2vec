@@ -58,6 +58,9 @@ for bp in BLUEPRINTS:
                 #print(element.get_attribute("outerHTML"))
                 gh_link = element.find_element(By.CSS_SELECTOR, "div.gh_link a")
                 gh_link = gh_link.get_attribute("href")
+                # Edit github link to redirect to raw so we scrape only the code and not the UI
+                gh_link = gh_link.replace("github.com", "raw.githubusercontent.com")
+                gh_link = gh_link.replace("blob/", "")
                 github_response = requests.get(gh_link)
                 print(github_response.text)
 
