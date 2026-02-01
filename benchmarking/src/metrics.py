@@ -2,15 +2,17 @@
 Docstring for benchmarking.src.metrics
 
 This module provides various metric functions used to evaluate the performance of embedding models.
-It includes implementations for common metrics such as Recall@K, Precision@K, Mean Reciprocal Rank (MRR),
+It includes implementations for common metrics such as Recall@K, Precision@K, Reciprocal Rank (RR),
 and Normalized Discounted Cumulative Gain (NDCG).
 
-Yes my code looks like it came straight out of CSE 12X
+Yes my code looks like it came straight out of CSE 12X. Comments galore!
 
 TODO: Add more metrics as needed.
 TODO: Should Recall and Precision return average across all queries or lists of per-query scores?
 - Jan 28th, 2026 - We think they should return lists of per-query scores for more flexibility.
 """
+
+import math
 
 
 """
@@ -69,9 +71,67 @@ def precision_at_k(k, rankings, ground_truth):
     return precisions # Return list of per-query precision scores
 
 """
-def mean_reciprocal_rank(rankings, ground_truth):
+@Behavior: Computes the Reciprocal Rank (RR) for a set of rankings against ground truth data.
+    - RR = 1 / rank of first relevant item
+    - To get Mean Reciprocal Rank (MRR), average the returned list.
+@Parameters: rankings (list of list): The ranked lists of retrieved items for each query.
+             ground_truth (list of set): The sets of relevant items for each query.
+@Returns: list of float: A list of reciprocal rank scores, one per query.
+                - If there are no relevant items for a query, its score is 0.0
+                - If there are no rankings provided, returns an empty list.
 """
+def reciprocal_ranks(rankings, ground_truth):
+    # TODO: Think about edge cases/exceptions
+    if not rankings:
+        return []
+
+    reciprocal_ranks = [] # List to store reciprocal rank for each query
+    for query_rankings, query_ground_truth in zip(rankings, ground_truth):
+        if len(query_ground_truth) == 0:
+            reciprocal_ranks.append(0.0)
+            continue
+
+        rr = 0.0
+        for idx, item in enumerate(query_rankings):
+            if item in query_ground_truth:
+                rr = 1.0 / (idx + 1)
+                break
+        reciprocal_ranks.append(rr)
+
+    return reciprocal_ranks # Return list of per-query reciprocal rank scores
 
 """
-def normalized_discounted_cumulative_gain(rankings, ground_truth):
+@Behavior: Computes the Normalized Discounted Cumulative Gain (NDCG) for a set of rankings.
+@Parameters: rankings (list of list): The ranked lists of retrieved items for each query.
+             ground_truth (list of set): The sets of relevant items for each query.
+@Returns: list of float: A list of NDCG scores, one per query.
+                - If there are no relevant items for a query, its NDCG is 0.0
+                - If there are no rankings provided, returns an empty list.
 """
+def normalized_discounted_cumulative_gain(rankings, ground_truth):
+    # TODO: Think about edge cases/exceptions
+    if not rankings:
+        return []
+
+    ndcgs = [] # List to store NDCG for each query
+    for query_rankings, query_ground_truth in zip(rankings, ground_truth):
+        if len(query_ground_truth) == 0:
+            ndcgs.append(0.0)
+            continue
+
+        # Compute DCG for the given ranking (binary relevance)
+        dcg = 0.0
+        for i, item in enumerate(query_rankings):
+            if item in query_ground_truth:
+                dcg += 1.0 / math.log2(i + 2)
+
+        # Compute IDCG for the ideal ranking
+        ideal_hits = min(len(query_ground_truth), len(query_rankings))
+        idcg = 0.0
+        for i in range(ideal_hits):
+            idcg += 1.0 / math.log2(i + 2)
+
+        ndcg = dcg / idcg if idcg > 0 else 0.0
+        ndcgs.append(ndcg)
+
+    return ndcgs # Return list of per-query NDCG scores
