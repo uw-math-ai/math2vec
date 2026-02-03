@@ -59,7 +59,9 @@ BLUEPRINTS = [
     "https://firsching.ch/FormalBook/blueprint/dep_graph_document.html",
     "https://oliver-butterley.github.io/SpectralThm/blueprint/dep_graph_document.html",
     "https://thefundamentaltheor3m.github.io/Sphere-Packing-Lean/blueprint/dep_graph_document.html",
-    "https://ilpreterosso.github.io/LEANearized-RadiiPolynomial/blueprint/dep_graph_document.html"
+    "https://ilpreterosso.github.io/LEANearized-RadiiPolynomial/blueprint/dep_graph_document.html",
+    "https://math-inc.github.io/strongpnt/blueprint/dep_graph_document.html",
+    "https://alexkontorovich.github.io/PrimeNumberTheoremAnd/blueprint/dep_graph_document.html"
 
 ]
 
