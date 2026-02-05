@@ -7,6 +7,7 @@ and Normalized Discounted Cumulative Gain (NDCG).
 
 Yes my code looks like it came straight out of CSE 12X. Comments galore!
 
+TODO: Convert this to use numpy arrays for efficiency where applicable.
 TODO: Add more metrics as needed.
 TODO: Should Recall and Precision return average across all queries or lists of per-query scores?
 - Jan 28th, 2026 - We think they should return lists of per-query scores for more flexibility.
