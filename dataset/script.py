@@ -73,12 +73,8 @@ BLUEPRINTS = [
     "https://kkytola.github.io/VirasoroProject/blueprint/dep_graph_document.html",
     "https://remydegenne.github.io/CLT/blueprint/dep_graph_document.html",
     "https://fredraj3.github.io/SemicircleLaw/blueprint/dep_graph_document.html",
-<<<<<<< HEAD
-    "https://riccardobrasca.github.io/Numbers/blueprint/dep_graph_document.html"
-=======
     "https://riccardobrasca.github.io/Numbers/blueprint/dep_graph_document.html",
     "https://kkytola.github.io/ExtremeValueProject/blueprint/dep_graph_document.html"
->>>>>>> d39bdd8f9a4bc666ab21c36cbe4720728a90f356
 ]
 
 
