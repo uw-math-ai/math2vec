@@ -61,8 +61,18 @@ BLUEPRINTS = [
     "https://thefundamentaltheor3m.github.io/Sphere-Packing-Lean/blueprint/dep_graph_document.html",
     "https://ilpreterosso.github.io/LEANearized-RadiiPolynomial/blueprint/dep_graph_document.html",
     "https://math-inc.github.io/strongpnt/blueprint/dep_graph_document.html",
-    "https://alexkontorovich.github.io/PrimeNumberTheoremAnd/blueprint/dep_graph_document.html"
-
+    "https://alexkontorovich.github.io/PrimeNumberTheoremAnd/blueprint/dep_graph_document.html",
+    "https://yaeldillies.github.io/toric/blueprint/dep_graph_document.html",
+    "https://teorth.github.io/pfr/blueprint/dep_graph_document.html",
+    "https://artie2000.github.io/real_closed_field/blueprint/dep_graph_document.html",
+    "https://yaeldillies.github.io/LeanAPAP/blueprint/dep_graph_document.html",
+    "https://emilyriehl.github.io/infinity-cosmos/blueprint/dep_graph_document.html",
+    "https://bergschaf.github.io/lean-banach-tarski/blueprint/dep_graph_document.html",
+    "https://remydegenne.github.io/testing-lower-bounds/blueprint/dep_graph_document.html",
+    "https://kkytola.github.io/VirasoroProject/blueprint/dep_graph_document.html",
+    "https://remydegenne.github.io/CLT/blueprint/dep_graph_document.html",
+    "https://fredraj3.github.io/SemicircleLaw/blueprint/dep_graph_document.html",
+    "https://riccardobrasca.github.io/Numbers/blueprint/dep_graph_document.html"
 ]
 
 OUTPUT_FILE = "blueprints.json"
