@@ -74,13 +74,13 @@ BLUEPRINTS = [
     "https://remydegenne.github.io/CLT/blueprint/dep_graph_document.html",
     "https://fredraj3.github.io/SemicircleLaw/blueprint/dep_graph_document.html",
     "https://riccardobrasca.github.io/Numbers/blueprint/dep_graph_document.html",
-    "https://kkytola.github.io/ExtremeValueProject/blueprint/dep_graph_document.html"
+    "https://kkytola.github.io/ExtremeValueProject/blueprint/dep_graph_document.html",
     "https://yaeldillies.github.io/forbidden-matrix/blueprint/dep_graph_document.html",
     "https://whysoserioushah.github.io/BrauerGroup_new/blueprint/dep_graph_document.html",
     "https://kbuzzard.github.io/ClassFieldTheory/blueprint/dep_graph_document.html",
     "https://james18lpc.github.io/GibbsMeasure/blueprint/dep_graph_document.html",
     "https://yaeldillies.github.io/apap/blueprint/dep_graph_document.html",
-    "https://ivan-sergeyev.github.io/seymour/blueprint/",
+    "https://ivan-sergeyev.github.io/seymour/blueprint/dep_graph_document.html",
     "https://leanprover-community.github.io/sphere-eversion/blueprint/dep_graph_document.html",
     "https://leanprover-community.github.io/flt-regular/blueprint/dep_graph_document.html"
 ]
