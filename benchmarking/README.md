@@ -6,6 +6,10 @@ This is the benchmark built for math2vec - a retrieval-focused text embedder eva
 
 A retrieval-focused benchmark evaluates how well an embedding model can encode text such that semantically similar items are close in the embedding space, enabling effective retrieval of relevant documents given a query.
 
+## Dependencies
+- faiss-cpu
+- numpy
+
 ## Structure of Benchmarking Directory
 
 ```
@@ -39,13 +43,15 @@ benchmarking/
 - **Symmetric Retrieval**: Both sides are similar types (e.g., paraphrase detection)
 - **Cross-lingual Retrieval**: Query in one language, retrieve in another
 
-Leo's answer: Theorem-query retrieval, given a search query, retrieve relevant theorems. Also 
+Leo's answer: Theorem-query retrieval, given a search query, retrieve relevant theorems. Also some Cross-lingual Retrieval - query in NL, get results in LaTeX and Lean.
 
 **Decision: Dataset composition**
 - Size of corpus (hundreds, thousands, millions of documents?)
 - Number of queries
 - Number of relevant documents per query (1-to-1, 1-to-many?)
 - Domain specificity (mathematics-focused for math2vec?)
+
+Leo's answer: 10 queries, 100 theorems/documents
 
 **Decision: Ground truth labeling**
 - Binary relevance (relevant/not relevant)
