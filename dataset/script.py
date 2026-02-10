@@ -6,6 +6,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+import os
 import re
 from urllib.parse import urlparse
 
@@ -59,13 +60,39 @@ BLUEPRINTS = [
     "https://firsching.ch/FormalBook/blueprint/dep_graph_document.html",
     "https://oliver-butterley.github.io/SpectralThm/blueprint/dep_graph_document.html",
     "https://thefundamentaltheor3m.github.io/Sphere-Packing-Lean/blueprint/dep_graph_document.html",
-    "https://ilpreterosso.github.io/LEANearized-RadiiPolynomial/blueprint/dep_graph_document.html"
-
+    "https://ilpreterosso.github.io/LEANearized-RadiiPolynomial/blueprint/dep_graph_document.html",
+    "https://math-inc.github.io/strongpnt/blueprint/dep_graph_document.html",
+    "https://alexkontorovich.github.io/PrimeNumberTheoremAnd/blueprint/dep_graph_document.html",
+    "https://yaeldillies.github.io/toric/blueprint/dep_graph_document.html",
+    "https://teorth.github.io/pfr/blueprint/dep_graph_document.html",
+    "https://artie2000.github.io/real_closed_field/blueprint/dep_graph_document.html",
+    "https://yaeldillies.github.io/LeanAPAP/blueprint/dep_graph_document.html",
+    "https://emilyriehl.github.io/infinity-cosmos/blueprint/dep_graph_document.html",
+    "https://bergschaf.github.io/lean-banach-tarski/blueprint/dep_graph_document.html",
+    "https://remydegenne.github.io/testing-lower-bounds/blueprint/dep_graph_document.html",
+    "https://kkytola.github.io/VirasoroProject/blueprint/dep_graph_document.html",
+    "https://remydegenne.github.io/CLT/blueprint/dep_graph_document.html",
+    "https://fredraj3.github.io/SemicircleLaw/blueprint/dep_graph_document.html",
+    "https://riccardobrasca.github.io/Numbers/blueprint/dep_graph_document.html",
+    "https://kkytola.github.io/ExtremeValueProject/blueprint/dep_graph_document.html",
+    "https://yaeldillies.github.io/forbidden-matrix/blueprint/dep_graph_document.html",
+    "https://whysoserioushah.github.io/BrauerGroup_new/blueprint/dep_graph_document.html",
+    "https://kbuzzard.github.io/ClassFieldTheory/blueprint/dep_graph_document.html",
+    "https://james18lpc.github.io/GibbsMeasure/blueprint/dep_graph_document.html",
+    "https://yaeldillies.github.io/apap/blueprint/dep_graph_document.html",
+    "https://ivan-sergeyev.github.io/seymour/blueprint/dep_graph_document.html",
+    "https://leanprover-community.github.io/sphere-eversion/blueprint/dep_graph_document.html",
+    "https://leanprover-community.github.io/flt-regular/blueprint/dep_graph_document.html"
 ]
 
-OUTPUT_FILE = "blueprints.json"
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_FILE = os.path.join(SCRIPT_DIR, "blueprints.json")
+
+
 
 blueprint_records = []
+processed_urls = {}
 
 session = requests.Session()
 chrome_options = webdriver.ChromeOptions()
@@ -86,8 +113,19 @@ except Exception as e:
     print(f"Error starting Chrome WebDriver: {e}")
     driver = None
 
+if(os.path.exists(OUTPUT_FILE)):
+    try:
+        with open(OUTPUT_FILE, "r", encoding="utf-8") as json_file:
+            blueprint_records = json.load(json_file)
+            processed_urls = {record["blueprint_url"] for record in blueprint_records}
+    except (json.JSONDecodeError, IOError):
+        print("Could not parse existing JSON")
+
 try:
     for bp in BLUEPRINTS:
+        if(bp in processed_urls):
+            print("Skipped a URL that was already in the bluepirint")
+            continue   
         try:
             response = session.get(bp)
         except requests.RequestException as e:
