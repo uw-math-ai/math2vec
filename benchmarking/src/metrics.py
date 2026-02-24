@@ -10,9 +10,11 @@ Yes my code looks like it came straight out of CSE 12X. Comments galore!
 TODO: Convert this to use numpy arrays for efficiency where applicable.
 - Jan 28th, 2026 - We will start with simple list-based implementations for clarity, then optimize with numpy later.
     - This is low priority, since the benchmark won't take long to run even with lists
-TODO: Add more metrics as needed.
+
+TODO: Add more metrics, specifically ones that are relevant for bitext mining, such as xsim
+
 TODO: Should Recall and Precision return average across all queries or lists of per-query scores?
-- Jan 28th, 2026 - We think they should return lists of per-query scores for more flexibility.
+- Jan 28th, 2026 - currently returns per-query scores for more flexibility in analysis
 """
 
 import math

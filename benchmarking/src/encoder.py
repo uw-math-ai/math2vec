@@ -14,6 +14,10 @@ class Encoder:
     @Attributes:
         model: The underlying model to use for encoding
         batch_size: Number of texts to encode at once
+                - This is important for efficiency, especially with large models and datasets  
+                - Large batch sizes = faster but more memory usage
+                - Small batch sizes = slower but less memory usage 
+                - Suggested: 32 or 64
         normalize: Whether to normalize embeddings to unit length
     """
 
