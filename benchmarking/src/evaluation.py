@@ -8,6 +8,7 @@ and compares them again ground truth data to compute metrics.
 Then, it takes the metric scores and generates evaluation reports,
 visualizations, and summaries.
 TODO: Reconsider how to structure getting rankings and ground truth data.
+TODO: Refector this code to handle multiple types of evaluation (retrieval, bitext mining)
 
 """
 
