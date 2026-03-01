@@ -61,3 +61,59 @@ class SentenceTransformerModel:
                 # calls the encode function from sentence-transformers, 
                 # which returns a numpy array of shape (n_texts, embedding_dim)
         return embeddings
+
+
+class random_embedder:
+    """
+    Model that generates completely random embeddings for input texts.
+    """
+
+    def __init__(
+        self,
+        embedding_dim: int = 384,
+        metadata: Optional[ModelMetadata] = None,
+        seed: Optional[int] = None,
+    ):
+        """
+        @Parameters:
+            embedding_dim (int): Dimension of embeddings to generate
+            metadata (ModelMetadata): Optional model metadata
+            seed (int): Optional random seed for reproducibility
+        """
+
+        if embedding_dim <= 0:
+            raise ValueError("embedding_dim must be a positive integer")
+
+        self.embedding_dim = embedding_dim
+        self.rng = np.random.default_rng(seed)
+
+        if metadata is None:
+            self.metadata = ModelMetadata(
+                name="random-embedder",
+                model_type="random",
+                embedding_dim=self.embedding_dim,
+                description="Generates random embeddings independently of text content.",
+                parameters={"seed": seed},
+            )
+        else:
+            self.metadata = metadata
+
+    def encode(self, texts: List[str], **kwargs) -> np.ndarray:
+        """
+        Generate random embeddings for a batch of texts.
+
+        @Parameters:
+            texts (list of str): Texts to encode
+            **kwargs: Unused, present for interface compatibility
+
+        @Returns:
+            numpy.ndarray: Random embeddings, shape (len(texts), embedding_dim)
+        """
+
+        if not isinstance(texts, list):
+            raise TypeError("texts must be a list of strings")
+
+        return self.rng.standard_normal((len(texts), self.embedding_dim)).astype(np.float32)
+
+
+RandomEmbedder = random_embedder
