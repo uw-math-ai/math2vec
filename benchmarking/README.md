@@ -165,6 +165,85 @@ Leo's answer: 10 queries, 100 theorems/documents
 
 ---
 
+## Adding a New Model (and using it from CLI)
+
+This benchmark is designed so any model can be plugged in, as long as it matches the encoder interface.
+
+### 1) Implement your model class in `benchmarking/src/model.py`
+
+Your class must:
+- expose `self.embedding_dim`
+- expose `self.metadata` (recommended, using `ModelMetadata`)
+- implement `encode(self, texts: List[str], **kwargs) -> np.ndarray`
+
+Template:
+
+```python
+class MyCustomModel:
+   def __init__(self, ...):
+      self.embedding_dim = 768
+      self.metadata = ModelMetadata(
+         name="my-custom-model",
+         model_type="custom",
+         embedding_dim=self.embedding_dim,
+         description="My trained embedding model",
+      )
+
+   def encode(self, texts, **kwargs):
+      # Return shape: (len(texts), embedding_dim)
+      return embeddings_numpy_array
+```
+
+### 2) Import it in `benchmarking/src/main.py`
+
+Example:
+
+```python
+from model import SentenceTransformerModel, RandomEmbedder, MyCustomModel
+```
+
+### 3) Add a CLI tag in `parse_args()`
+
+Extend `--model-type` choices:
+
+```python
+parser.add_argument(
+   "--model-type",
+   choices=["sentence-transformer", "random", "my-custom"],
+   default="sentence-transformer",
+)
+```
+
+### 4) Wire model creation in `main()`
+
+Add a branch for your new tag:
+
+```python
+if args.model_type == "random":
+   model_instance = RandomEmbedder()
+elif args.model_type == "my-custom":
+   model_instance = MyCustomModel(...)
+else:
+   model_instance = SentenceTransformerModel(model_name=args.model_name, device=args.device)
+```
+
+### 5) Run your model from CLI
+
+```bash
+python benchmarking/src/main.py --model-type my-custom
+```
+
+### Notes
+
+- Keep output shape consistent: `(batch_size, embedding_dim)`.
+- Return a NumPy array (`np.ndarray`) from `encode`.
+- If your model needs extra config (checkpoint path, seed, etc.), add additional CLI args in `parse_args()` and pass them into your model constructor.
+- Current implemented tags are:
+  - `sentence-transformer`
+  - `random`
+
+---
+
 ## Questions to Answer Before Implementation
 
 1. **What is your specific math retrieval task?** (e.g., find similar theorems, retrieve proofs, match problem-solution pairs)

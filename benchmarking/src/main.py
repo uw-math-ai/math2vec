@@ -10,7 +10,7 @@ from pathlib import Path
 import time
 import data
 from encoder import Encoder
-from model import SentenceTransformerModel
+from model import SentenceTransformerModel, RandomEmbedder
 import retriever
 import evaluation
 import pairing
@@ -35,6 +35,14 @@ K = 10 # number of neighbors to retrieve, passed to retriever and evaluation fun
 """
 def parse_args():
     parser = argparse.ArgumentParser(description="Run embedding benchmark pipeline.")
+    parser.add_argument(
+        "--model-type",
+        choices=["sentence-transformer", "random"],
+            # add more choices here as we implement more model types
+
+        default="sentence-transformer",
+        help="Embedding backend to use.",
+    )
     parser.add_argument(
         "--model-name",
         default="sentence-transformers/all-MiniLM-L6-v2",
@@ -83,7 +91,10 @@ def main():
     start = time.perf_counter() # start timer for debugging why this takes so long to run
 
     # initialize model instance here
-    model_instance = SentenceTransformerModel(model_name=args.model_name, device=args.device)
+    if args.model_type == "random":
+        model_instance = RandomEmbedder()
+    else:
+        model_instance = SentenceTransformerModel(model_name=args.model_name, device=args.device)
     
     # intialize encoder instance here, passing in the model instance
     encoder_instance = Encoder(model_instance, batch_size=args.batch_size, normalize=args.normalize)
@@ -91,14 +102,17 @@ def main():
 
     model_loaded = time.perf_counter()
     print("Model and encoder initialized successfully.")
-    print(f"Model: {args.model_name}")
-    print(f"Device: {model_instance.device}")
+    if args.model_type == "random":
+        print("Model: random-embedder")
+    else:
+        print(f"Model: {args.model_name}")
+        print(f"Device: {model_instance.device}")
     print(f"Normalize embeddings: {args.normalize}")
     print(f"Model load time: {model_loaded - start:.2f}s")
     print()
 
     # Load the dataset (queries and corpus) with data.py
-    theorems = data.load_corpus(Path("benchmarking/data/corpus_blueprints.json"))
+    theorems = data.load_corpus(Path("benchmarking/data/corpus_shuffled.json"))
     if not theorems:
         raise ValueError("No theorems loaded. Check the corpus JSON path/format.")
 
@@ -127,28 +141,11 @@ def main():
     embedding_pairs, index_pairs = pairing.find_pairs(latex_embeddings, lean_embeddings, normalized=args.normalize)
     print(f"Found {len(embedding_pairs)} embedding pairs")
 
-    # print out the first 5 pairs of index pairs for mini-benchmarking
-    # in an ideal world, with a perfect embedder, we expect (0, 0), (1, 1), etc
-    print("First 5 index pairs (latex_idx, lean_idx):")
-    for i in range(min(5, len(index_pairs))):
-        print(index_pairs[i])
+    percent_correct = evaluation.compute_bitext_mining_metrics(index_pairs, [(i, i) for i in range(len(theorems))])
+    print(f"Percent of correct pairs: {percent_correct['Percent Correct Pairs']:.2f}%")
 
-    # quick visualization of the index pairs to see if they cluster around the diagonal (indicating good pairing)
-    import matplotlib.pyplot as plt
-
-    plt.figure(figsize=(10, 10))
-    plt.scatter(
-        [idx_pair[0] for idx_pair in index_pairs],
-        [idx_pair[1] for idx_pair in index_pairs],
-        alpha=0.5,
-        label="Paired Indices",
-    )
-    plt.xlabel("LaTeX Index")
-    plt.ylabel("Lean Index (Nearest Neighbor)")
-    plt.title("Pairing Visualization")
-    plt.legend()
-    plt.show()
-    plt.close()
+    # pair_graph = evaluation.generate_pairing_eval_graph(index_pairs)
+    # pair_graph.show()
     
 
 

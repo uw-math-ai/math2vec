@@ -15,29 +15,55 @@ TODO: Refector this code to handle multiple types of evaluation (retrieval, bite
 import metrics
 
 """
-@Behavior: Computes various evaluation metrics given rankings and ground truth.
+@Behavior: Computes evaluation metrics specific to bitext mining tasks, 
+           given identified pairs and ground truth pairs.
+@Parameters: embedded_index_pairs (list of tuples): List of index pairs identified by the embedding-based pairing function.
+             corpus_index_pairs (list of tuples): List of index pairs from the ground truth corpus data.
+@Returns: dict: A dictionary of computed metric scores specific to bitext mining.
+TODO: Consider what specific metrics are relevant for bitext mining and implement them here.
+- Currently we are only computing Percent Correct Pairs, but we may want to add more metrics relevant to bitext mining in the future.
+"""
+def compute_bitext_mining_metrics(embedded_index_pairs, corpus_index_pairs):
+    return {"Percent Correct Pairs": metrics.percent_correct_pairs(embedded_index_pairs, corpus_index_pairs)}
+
+"""
+@Behavior: Custom graphing function to visualize the quality of the identified pairs in bitext mining.
+            - This is a quick visualization to see if the identified pairs cluster around the diagonal, which would indicate good pairing.
+@Parameters: embedded_index_pairs (list of tuples): List of index pairs identified by the embedding-based pairing function.
+@Returns: A matplotlib figure object visualizing the identified pairs.
+TODO: Consider what specific visualizations are most informative for evaluating bitext mining performance.
+            - Currently we are plotting the identified index pairs to see if they cluster around the diagonal
+"""
+def generate_pairing_eval_graph(embedded_index_pairs):
+    import matplotlib.pyplot as plt
+    # quick visualization of the index pairs to see if they cluster around the diagonal (indicating good pairing)
+
+    plt.figure(figsize=(10, 10))
+    plt.scatter(
+        [idx_pair[0] for idx_pair in embedded_index_pairs],
+        [idx_pair[1] for idx_pair in embedded_index_pairs],
+        alpha=0.5,
+        label="Paired Indices",
+    )
+    plt.xlabel("LaTeX Index")
+    plt.ylabel("Lean Index (Nearest Neighbor)")
+    plt.title("Pairing Visualization")
+    plt.legend()
+    return plt
+
+"""
+@Behavior: Computes evaluation metrics for retrieval tasks, given rankings and ground truth data.
 @Parameters: rankings (list of list): The ranked lists of retrieved items for each query.
              ground_truth (list of set): The sets of relevant items for each query.
-             K (int): The cutoff rank for metrics that require it 
-@Returns: dict: A dictionary of computed metric scores. Maps metric names to their scores.
-TODO: Consider whether dictionary should map to lists of per-query scores or overall averages.
-TODO: Is dictionary the best structure here?
-
-Feb 6th, 2026 - Currently we are mapping metric names to lists of per-query scores for more flexibility in analysis and reporting.
-- We may want to add an option to also compute and return overall averages in the future.
-- Also these metrics are purely retrieval-related. Should later add Bitext Mining metrics as well.
+             K (int): The cutoff rank for metrics like Precision@K and Recall@K.
+@Returns: dict: A dictionary of computed metric scores for retrieval tasks.
+TODO: Consider what specific metrics are relevant for retrieval tasks and implement them here.
 """
-def compute_evaluation_metrics(rankings, ground_truth, K):
-    # make dictionary to hold metric scores
+def compute_retrieval_metrics(rankings, ground_truth, K):
     metrics_dict = {}
-
-    # compute metrics using functions from metrics.py and store in dictionary
-    metrics_dict['hit_at_k'] = metrics.hit_at_k(K, rankings, ground_truth)
-    metrics_dict['recall_at_k'] = metrics.recall_at_k(K, rankings, ground_truth)
-    metrics_dict['precision_at_k'] = metrics.precision_at_k(K, rankings, ground_truth)
-    metrics_dict['reciprocal_rank'] = metrics.reciprocal_ranks(rankings, ground_truth)
-    metrics_dict['ndcg_at_k'] = metrics.normalized_discounted_cumulative_gain(rankings, ground_truth)   
-    
+    metrics_dict["Precision@K"] = metrics.precision_at_k(K, rankings, ground_truth)
+    metrics_dict["Recall@K"] = metrics.recall_at_k(K, rankings, ground_truth)
+    metrics_dict["Reciprocal Rank"] = metrics.reciprocal_ranks(rankings, ground_truth)
     return metrics_dict
 
 """
