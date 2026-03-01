@@ -37,6 +37,7 @@ def sample_theorems(blueprints: list[dict], k: int, seed: int) -> list[dict]:
 def regroup_by_blueprint(blueprints: list[dict], sample: list[dict]) -> list[dict]:
     # Kept for compatibility; output is now a flat list without blueprint URLs.
     _ = blueprints
+    random.shuffle(sample)  # Shuffle the sample to avoid any ordering bias.
     return sample
 
 
@@ -51,10 +52,10 @@ def parse_args() -> argparse.Namespace:
     script_dir = Path(__file__).resolve().parent
     repo_root = script_dir.parent
     default_input = script_dir / "blueprints.json"
-    default_output = repo_root / "benchmarking" / "data" / "corpus.json"
+    default_output = repo_root / "benchmarking" / "data" / "corpus_shuffled.json"
 
     parser = argparse.ArgumentParser(
-        description="Sample 100 theorems from blueprints.json into corpus.json"
+        description="Sample 100 theorems from blueprints.json into corpus_shuffled.json"
     )
     parser.add_argument("--input", type=Path, default=default_input)
     parser.add_argument("--output", type=Path, default=default_output)
