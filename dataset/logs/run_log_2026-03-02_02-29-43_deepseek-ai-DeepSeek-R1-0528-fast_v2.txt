@@ -1,0 +1,5 @@
+Model: deepseek-ai/DeepSeek-R1-0528-fast
+Theorem count: 10
+Prompt tokens: 1277
+Completion tokens: 39430
+Total tokens: 40707

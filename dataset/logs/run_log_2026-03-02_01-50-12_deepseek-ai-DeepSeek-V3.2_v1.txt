@@ -1,0 +1,6 @@
+Model: deepseek-ai/DeepSeek-V3.2
+Theorem count: 10
+Prompt tokens: 1292
+Completion tokens: 1328
+Total tokens: 2620
+Estimated cost: $0.000985

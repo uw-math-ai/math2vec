@@ -82,7 +82,8 @@ BLUEPRINTS = [
     "https://yaeldillies.github.io/apap/blueprint/dep_graph_document.html",
     "https://ivan-sergeyev.github.io/seymour/blueprint/dep_graph_document.html",
     "https://leanprover-community.github.io/sphere-eversion/blueprint/dep_graph_document.html",
-    "https://leanprover-community.github.io/flt-regular/blueprint/dep_graph_document.html"
+    "https://leanprover-community.github.io/flt-regular/blueprint/dep_graph_document.html",
+    "https://vilin97.github.io/forward_euler/blueprint/dep_graph_document.html"
 ]
 
 
