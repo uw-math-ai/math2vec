@@ -83,7 +83,20 @@ BLUEPRINTS = [
     "https://ivan-sergeyev.github.io/seymour/blueprint/dep_graph_document.html",
     "https://leanprover-community.github.io/sphere-eversion/blueprint/dep_graph_document.html",
     "https://leanprover-community.github.io/flt-regular/blueprint/dep_graph_document.html",
-    "https://vilin97.github.io/forward_euler/blueprint/dep_graph_document.html"
+    "https://vilin97.github.io/forward_euler/blueprint/dep_graph_document.html",
+    "https://xiyou-wu.github.io/RiemannianGeometry/blueprint/dep_graph_document.html",
+    "https://nasqret.github.io/fineqs/blueprint/dep_graph_document.html",
+    "https://mariovagomarzal.github.io/higher_category_theory/blueprint/dep_graph_document.html",
+    "https://remydegenne.github.io/lean-bandits/blueprint/dep_graph_document.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_2.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_3.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_4.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_5.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_6.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_7.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_A.html",
+    "https://fmljohn.github.io/Hochster/blueprint/dep_graph_document.html",
+    "https://jcreedcmu.github.io/Noperthedron/blueprint/dep_graph_document.html",
 ]
 
 
