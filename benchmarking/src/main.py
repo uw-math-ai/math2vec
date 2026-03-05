@@ -37,7 +37,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run embedding benchmark pipeline.")
     parser.add_argument(
         "--model-type",
-        choices=["sentence-transformer", "random"],
+        # choices=["sentence-transformer", "random"],
             # add more choices here as we implement more model types
 
         default="sentence-transformer",
@@ -84,7 +84,6 @@ def parse_args():
     return parser.parse_args()
 
 
-# TODO: figure out how to index the corpus and queries so that we can match retrieved results to ground truth for evaluation
 def main():
     args = parse_args() # parse command line arguments
 
@@ -107,14 +106,17 @@ def main():
     else:
         print(f"Model: {args.model_name}")
         print(f"Device: {model_instance.device}")
-    print(f"Normalize embeddings: {args.normalize}")
     print(f"Model load time: {model_loaded - start:.2f}s")
     print()
 
     # Load the dataset (queries and corpus) with data.py
-    theorems = data.load_corpus(Path("benchmarking/data/corpus_shuffled.json"))
+    theorems = data.load_blueprints() # load theorems from the blueprints dataset
+    
+    theorems = data.extract_latex_and_lean_from_hf_dataset(data.load_frenzy_math(random_sample=True, num_samples=1000)) 
+        # extract LaTeX and Lean code from the Hugging Face dataset format
     if not theorems:
         raise ValueError("No theorems loaded. Check the corpus JSON path/format.")
+    
 
     # optionally limit the number of items to process for faster testing
     if args.max_items is not None:
@@ -132,13 +134,13 @@ def main():
 
     # print out timing and shapes of the resulting embeddings for debugging
     encoded = time.perf_counter()
-    print(f"Encoded LaTeX embeddings shape: {latex_embeddings.shape}")
-    print(f"Encoded Lean embeddings shape: {lean_embeddings.shape}")
     print(f"Embedding time: {encoded - model_loaded:.2f}s")
     print(f"Total elapsed time: {encoded - start:.2f}s")
 
     # find pairs of related embeddings using the pairing function in pairing.py
     embedding_pairs, index_pairs = pairing.find_pairs(latex_embeddings, lean_embeddings, normalized=args.normalize)
+        # this makes the pairing direction latex -> lean, since we search for nearest neighbors 
+        # in the lean embedding space for each latex embedding
     print(f"Found {len(embedding_pairs)} embedding pairs")
 
     percent_correct = evaluation.compute_bitext_mining_metrics(index_pairs, [(i, i) for i in range(len(theorems))])
