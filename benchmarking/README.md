@@ -6,6 +6,10 @@ This is the benchmark built for math2vec - a retrieval-focused text embedder eva
 
 A retrieval-focused benchmark evaluates how well an embedding model can encode text such that semantically similar items are close in the embedding space, enabling effective retrieval of relevant documents given a query.
 
+## Dependencies
+- faiss-cpu
+- numpy
+
 ## Structure of Benchmarking Directory
 
 ```
@@ -39,13 +43,15 @@ benchmarking/
 - **Symmetric Retrieval**: Both sides are similar types (e.g., paraphrase detection)
 - **Cross-lingual Retrieval**: Query in one language, retrieve in another
 
-Leo's answer: Theorem-query retrieval, given a search query, retrieve relevant theorems. Also 
+Leo's answer: Theorem-query retrieval, given a search query, retrieve relevant theorems. Also some Cross-lingual Retrieval - query in NL, get results in LaTeX and Lean.
 
 **Decision: Dataset composition**
 - Size of corpus (hundreds, thousands, millions of documents?)
 - Number of queries
 - Number of relevant documents per query (1-to-1, 1-to-many?)
 - Domain specificity (mathematics-focused for math2vec?)
+
+Leo's answer: 10 queries, 100 theorems/documents
 
 **Decision: Ground truth labeling**
 - Binary relevance (relevant/not relevant)
@@ -156,6 +162,85 @@ Leo's answer: Theorem-query retrieval, given a search query, retrieve relevant t
    ↓
 8. Aggregate and report results
 ```
+
+---
+
+## Adding a New Model (and using it from CLI)
+
+This benchmark is designed so any model can be plugged in, as long as it matches the encoder interface.
+
+### 1) Implement your model class in `benchmarking/src/model.py`
+
+Your class must:
+- expose `self.embedding_dim`
+- expose `self.metadata` (recommended, using `ModelMetadata`)
+- implement `encode(self, texts: List[str], **kwargs) -> np.ndarray`
+
+Template:
+
+```python
+class MyCustomModel:
+   def __init__(self, ...):
+      self.embedding_dim = 768
+      self.metadata = ModelMetadata(
+         name="my-custom-model",
+         model_type="custom",
+         embedding_dim=self.embedding_dim,
+         description="My trained embedding model",
+      )
+
+   def encode(self, texts, **kwargs):
+      # Return shape: (len(texts), embedding_dim)
+      return embeddings_numpy_array
+```
+
+### 2) Import it in `benchmarking/src/main.py`
+
+Example:
+
+```python
+from model import SentenceTransformerModel, RandomEmbedder, MyCustomModel
+```
+
+### 3) Add a CLI tag in `parse_args()`
+
+Extend `--model-type` choices:
+
+```python
+parser.add_argument(
+   "--model-type",
+   choices=["sentence-transformer", "random", "my-custom"],
+   default="sentence-transformer",
+)
+```
+
+### 4) Wire model creation in `main()`
+
+Add a branch for your new tag:
+
+```python
+if args.model_type == "random":
+   model_instance = RandomEmbedder()
+elif args.model_type == "my-custom":
+   model_instance = MyCustomModel(...)
+else:
+   model_instance = SentenceTransformerModel(model_name=args.model_name, device=args.device)
+```
+
+### 5) Run your model from CLI
+
+```bash
+python benchmarking/src/main.py --model-type my-custom
+```
+
+### Notes
+
+- Keep output shape consistent: `(batch_size, embedding_dim)`.
+- Return a NumPy array (`np.ndarray`) from `encode`.
+- If your model needs extra config (checkpoint path, seed, etc.), add additional CLI args in `parse_args()` and pass them into your model constructor.
+- Current implemented tags are:
+  - `sentence-transformer`
+  - `random`
 
 ---
 
