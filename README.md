@@ -2,6 +2,8 @@
 
 **math2vec** is a project aimed at training and evaluating a text embedding model that works well on mathematical content across two modalities: natural language (LaTeX) and formal Lean 4 code.
 
+[View the Math2Vec Poster](https://github.com/uw-math-ai/math2vec/blob/main/2026-03_math2vec_poster.pdf)
+
 ## Origins
 
 math2vec grew out of [TheoremSearch](https://github.com/uw-math-ai/TheoremSearch), a project providing semantic search over 9 million mathematical theorems from arXiv, the Stacks Project, and other sources. TheoremSearch demonstrated that embedding-based retrieval works well for informal math, but its embedders were not designed for formal mathematics (Lean 4 code). math2vec addresses this gap: rather than building another search index, it focuses on benchmarking and improving embedders that must bridge both modalities — informal LaTeX and formal Lean — to enable the next generation of theorem search tools that span the informal/formal divide.
@@ -37,4 +39,7 @@ cd benchmarking
 pip install -r requirements.txt
 python src/main.py
 ```
+
+
+
  
