@@ -8,12 +8,21 @@ Docstring for benchmarking.src.main
 import argparse
 from pathlib import Path
 import time
+import json
+import numpy as np
 import data
 from encoder import Encoder
 from model import SentenceTransformerModel, RandomEmbedder
 import retriever
 import evaluation
 import pairing
+
+"""
+sub-dependencies:
+torch, transformers, sentence-transformers for the model and encoding
+faiss for efficient nearest neighbor search in pairing
+matplotlib for visualization in evaluation
+"""
 
 """
 GLOBAL VARIABLES
@@ -65,6 +74,22 @@ def parse_args():
         default=None,
         help="Force device, e.g. 'cpu' or 'cuda'. Defaults to auto-detect.",
     )
+    parser.add_argument(
+        "--save-embeddings",
+        action="store_true",
+        help="Save generated embeddings and metadata to disk.",
+    )
+    parser.add_argument(
+        "--save-dir",
+        default="benchmarking/data/embeddings",
+        help="Directory where embedding files are written.",
+    )
+    parser.add_argument(
+        "--save-format",
+        choices=["npz", "npy"],
+        default="npz",
+        help="File format for saved embeddings.",
+    )
 
     # Mutually exclusive group for normalization options
     normalize_group = parser.add_mutually_exclusive_group()
@@ -112,7 +137,7 @@ def main():
     # Load the dataset (queries and corpus) with data.py
     theorems = data.load_blueprints() # load theorems from the blueprints dataset
     
-    theorems = data.extract_latex_and_lean_from_hf_dataset(data.load_frenzy_math(random_sample=True, num_samples=1000)) 
+    # theorems = data.extract_latex_and_lean_from_hf_dataset(data.load_frenzy_math(random_sample=True, num_samples=1000)) 
         # extract LaTeX and Lean code from the Hugging Face dataset format
     if not theorems:
         raise ValueError("No theorems loaded. Check the corpus JSON path/format.")
@@ -132,6 +157,7 @@ def main():
     latex_embeddings = encoder_instance.encode(latex_statements)
     lean_embeddings = encoder_instance.encode(lean_code)
 
+    
     # print out timing and shapes of the resulting embeddings for debugging
     encoded = time.perf_counter()
     print(f"Embedding time: {encoded - model_loaded:.2f}s")
