@@ -83,13 +83,33 @@ BLUEPRINTS = [
     "https://ivan-sergeyev.github.io/seymour/blueprint/dep_graph_document.html",
     "https://leanprover-community.github.io/sphere-eversion/blueprint/dep_graph_document.html",
     "https://leanprover-community.github.io/flt-regular/blueprint/dep_graph_document.html",
-    "https://vilin97.github.io/forward_euler/blueprint/dep_graph_document.html"
+    "https://vilin97.github.io/forward_euler/blueprint/dep_graph_document.html",
+    "https://xiyou-wu.github.io/RiemannianGeometry/blueprint/dep_graph_document.html",
+    "https://nasqret.github.io/fineqs/blueprint/dep_graph_document.html",
+    "https://mariovagomarzal.github.io/higher_category_theory/blueprint/dep_graph_document.html",
+    "https://remydegenne.github.io/lean-bandits/blueprint/dep_graph_document.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_2.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_3.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_4.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_5.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_6.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_7.html",
+    "https://leanprover-community.github.io/con-nf/blueprint/dep_graph_chapter_A.html",
+    "https://fmljohn.github.io/Hochster/blueprint/dep_graph_document.html",
+    "https://jcreedcmu.github.io/Noperthedron/blueprint/dep_graph_document.html",
 ]
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_FILE = os.path.join(SCRIPT_DIR, "blueprints.json")
 
+
+def save_to_disk(records):
+    try:
+        with open(OUTPUT_FILE, "w", encoding="utf-8") as json_file:
+            json.dump(records, json_file, indent=2)
+    except IOError as e:
+        print(f"Error saving file: {e}")
 
 
 blueprint_records = []
@@ -123,25 +143,27 @@ if(os.path.exists(OUTPUT_FILE)):
         print("Could not parse existing JSON")
 
 try:
-    for bp in BLUEPRINTS:
+    for i, bp in enumerate(BLUEPRINTS):
+        print(f"Processing {i + 1}/{len(BLUEPRINTS)}: {bp}")
+
         if(bp in processed_urls):
-            print("Skipped a URL that was already in the bluepirint")
-            continue   
+            print("  Skipped (already processed)")
+            continue
+
         try:
             response = session.get(bp)
         except requests.RequestException as e:
-            print(f"Error fetching blueprint URL {bp}: {e}")
+            print(f"  Error fetching blueprint URL: {e}")
             continue
         if response.status_code != 200:
-            print(f"Error fetching blueprint URL {bp}: status {response.status_code}")
+            print(f"  Error fetching blueprint URL: status {response.status_code}")
             continue
         html_content = response.text
 
-        # Convert the html_content into a soup (easily searchable and parsable document) and then parse it into thms/nodes
         soup = BeautifulSoup(html_content, "html.parser")
         thms = soup.select("div.thm[id]")
         if not thms:
-            print(f"Error: no theorem nodes found for blueprint {bp}")
+            print(f"  Error: no theorem nodes found")
             continue
 
         records = []
@@ -151,52 +173,52 @@ try:
 
             thm_content = n.find("div", class_="thm_thmcontent")
             if not thm_content:
-                print(f"Error: missing theorem content for id {n.get('id')}")
+                print(f"  Error: missing theorem content for id {n.get('id')}")
                 continue
             entry["LaTeX"] = thm_content.get_text(strip=True)
 
             lean_a = n.select_one("a.lean_link.lean_decl")
             lean_url = lean_a["href"] if lean_a else None
             if not lean_url:
-                print(f"Error: missing lean URL for id {n.get('id')}")
+                print(f"  Error: missing lean URL for id {n.get('id')}")
                 continue
             lean_decl = lean_url.split("#doc/")[-1] if lean_url else None
             entry["lean_url"] = lean_url
             if not lean_decl:
-                print(f"Error: missing lean declaration for id {n.get('id')}")
+                print(f"  Error: missing lean declaration for id {n.get('id')}")
                 continue
             entry["lean_decl"] = lean_decl
 
             if not driver:
-                print("Error: WebDriver not available, skipping Selenium steps")
+                print("  Error: WebDriver not available, skipping Selenium steps")
                 break
 
             try:
                 driver.get(lean_url)
             except Exception as e:
-                print(f"Error loading lean URL {lean_url}: {e}")
+                print(f"  Error loading lean URL {lean_url}: {e}")
                 continue
             try:
                 WebDriverWait(driver, 15).until(
                     EC.presence_of_element_located((By.ID, lean_decl))
                 )
             except Exception as e:
-                print(f"Error waiting for lean declaration {lean_decl} at {lean_url}: {e}")
+                print(f"  Error waiting for lean declaration {lean_decl} at {lean_url}: {e}")
                 continue
 
             try:
                 element = driver.find_element(By.ID, lean_decl)
             except Exception as e:
-                print(f"Error finding lean declaration element {lean_decl} at {lean_url}: {e}")
+                print(f"  Error finding lean declaration element {lean_decl} at {lean_url}: {e}")
                 continue
-            #print(element.get_attribute("outerHTML"))
+
             try:
                 gh_link = element.find_element(By.CSS_SELECTOR, "div.gh_link a").get_attribute("href")
             except Exception as e:
-                print(f"Error finding GitHub link for {lean_decl} at {lean_url}: {e}")
+                print(f"  Error finding GitHub link for {lean_decl} at {lean_url}: {e}")
                 continue
             if not gh_link:
-                print(f"Error: empty GitHub link for {lean_decl} at {lean_url}")
+                print(f"  Error: empty GitHub link for {lean_decl} at {lean_url}")
                 continue
             entry["gh_link"] = gh_link
 
@@ -207,7 +229,7 @@ try:
                 start_line = int(match.group(1))
                 end_line = int(match.group(2) or match.group(1))
             else:
-                print(f"Error: missing line fragment in GitHub URL {gh_link}")
+                print(f"  Error: missing line fragment in GitHub URL {gh_link}")
                 entry["highlighted"] = None
                 records.append(entry)
                 continue
@@ -217,7 +239,7 @@ try:
                 gh_link,
             )
             if not gh_path_match:
-                print(f"Error: unexpected GitHub blob URL format {gh_link}")
+                print(f"  Error: unexpected GitHub blob URL format {gh_link}")
                 entry["highlighted"] = None
                 records.append(entry)
                 continue
@@ -228,12 +250,12 @@ try:
             try:
                 raw_resp = session.get(raw_url)
             except requests.RequestException as e:
-                print(f"Error fetching raw GitHub file {raw_url}: {e}")
+                print(f"  Error fetching raw GitHub file {raw_url}: {e}")
                 entry["highlighted"] = None
                 records.append(entry)
                 continue
             if raw_resp.status_code != 200:
-                print(f"Error fetching raw GitHub file {raw_url}: status {raw_resp.status_code}")
+                print(f"  Error fetching raw GitHub file {raw_url}: status {raw_resp.status_code}")
                 entry["highlighted"] = None
                 records.append(entry)
                 continue
@@ -241,7 +263,7 @@ try:
             raw_lines = raw_resp.text.splitlines()
             if start_line < 1 or end_line > len(raw_lines):
                 print(
-                    f"Error: line range {start_line}-{end_line} out of bounds for {raw_url} "
+                    f"  Error: line range {start_line}-{end_line} out of bounds for {raw_url} "
                     f"(file has {len(raw_lines)} lines)"
                 )
                 entry["highlighted"] = None
@@ -257,21 +279,14 @@ try:
                 "theorems": records,
             }
         )
+
+        # Save to disk after each blueprint is processed
+        save_to_disk(blueprint_records)
+        print(f"  Saved {len(records)} theorems to {OUTPUT_FILE}")
+
 finally:
     if driver:
         driver.quit()
 
-try:
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as json_file:
-        json.dump(blueprint_records, json_file, indent=2)
-    print(f"Saved blueprint data to {OUTPUT_FILE}")
-except IOError as e:
-    print(f"Error saving file: {e}")
-
-
-           
-
-
-
-
+print(f"Done! All blueprints processed. Data saved to {OUTPUT_FILE}")
 
