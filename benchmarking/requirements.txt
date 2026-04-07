@@ -4,3 +4,4 @@ faiss-cpu
 datasets
 matplotlib
 torch
+mirb

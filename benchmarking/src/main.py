@@ -6,6 +6,7 @@ Docstring for benchmarking.src.main
 
 # import necessary modules
 import argparse
+import importlib
 from pathlib import Path
 import time
 import json
@@ -29,15 +30,112 @@ GLOBAL VARIABLES
 """
 K = 10 # number of neighbors to retrieve, passed to retriever and evaluation functions 
 
+
+class MIRBModelAdapter:
+    """
+    Adapter that exposes the encoding interface expected by MIRB/MTEB.
+    """
+
+    def __init__(self, model_instance, batch_size: int, normalize: bool):
+        self.model_instance = model_instance
+        self.batch_size = batch_size
+        self.normalize = normalize
+
+    def _filter_model_kwargs(self, kwargs):
+        """
+        Keep only kwargs supported by the underlying SentenceTransformer model.
+
+        MIRB may pass task-specific kwargs (e.g., task_name, prompt_type, max_length)
+        that some models such as all-MiniLM-L6-v2 do not accept.
+        """
+        if not hasattr(self.model_instance, "model"):
+            return kwargs
+
+        model = self.model_instance.model
+        if not hasattr(model, "get_model_kwargs"):
+            return kwargs
+
+        accepted = set(model.get_model_kwargs())
+        return {key: value for key, value in kwargs.items() if key in accepted}
+
+    def encode(self, sentences, **kwargs):
+        encode_kwargs = {
+            "batch_size": kwargs.pop("batch_size", self.batch_size),
+            "normalize_embeddings": kwargs.pop("normalize_embeddings", self.normalize),
+        }
+        encode_kwargs.update(self._filter_model_kwargs(kwargs))
+
+        if hasattr(self.model_instance, "model"):
+            return self.model_instance.model.encode(sentences, convert_to_numpy=True, **encode_kwargs)
+        return self.model_instance.encode(sentences, **encode_kwargs)
+
+    def encode_queries(self, queries, **kwargs):
+        return self.encode(queries, **kwargs)
+
+    def encode_corpus(self, corpus, **kwargs):
+        if corpus and isinstance(corpus[0], dict):
+            flattened_corpus = []
+            for item in corpus:
+                title = item.get("title", "")
+                text = item.get("text", "")
+                flattened_corpus.append(f"{title} {text}".strip())
+            return self.encode(flattened_corpus, **kwargs)
+        return self.encode(corpus, **kwargs)
+
+
+def run_mirb_evaluation(args, model_instance):
+    """
+    Run MIRB evaluation via the MIRB-provided MTEB interface.
+    """
+
+    try:
+        mteb = importlib.import_module("mteb")
+    except ImportError as import_error:
+        raise ImportError(
+            "MIRB is not installed. Install with `pip install mirb` and retry."
+        ) from import_error
+
+    task_names = [task.strip() for task in args.mirb_tasks.split(",") if task.strip()]
+    if not task_names:
+        raise ValueError("--mirb-tasks must include at least one task name.")
+
+    model_name = getattr(model_instance, "model_name", args.model_type)
+    task_list = mteb.get_tasks(tasks=task_names)
+    evaluation = mteb.MTEB(tasks=task_list)
+    adapter = MIRBModelAdapter(model_instance, batch_size=args.batch_size, normalize=args.normalize)
+
+    output_folder = Path(args.mirb_output_dir) / _slugify(model_name)
+    print(f"Running MIRB on tasks: {', '.join(task_names)}")
+    print(f"MIRB output directory: {output_folder}")
+
+    return evaluation.run(
+        adapter,
+        output_folder=str(output_folder),
+        encode_kwargs={
+            "batch_size": args.mirb_batch_size,
+            "max_length": args.mirb_max_length,
+        },
+        save_predictions=True,
+    )
+
 """
-@Behavior: parse command line arguments for model name, batch size, max items to process, normalization, and device to use.
+@Behavior: parse command line arguments for model selection, batch size, max items to process, normalization, device, and optional embedding saving.
 @Arguments:
+    --model-type: Embedding backend to use
+        (default: "sentence-transformer")
     --model-name: Name or path of the sentence-transformers model to use 
         (default: "sentence-transformers/all-MiniLM-L6-v2")
     --batch-size: Batch size for encoding 
         (default: 32)
     --max-items: Optional cap on number of theorem pairs to encode 
         (default: None, meaning no limit)
+    --device: Force device, e.g. 'cpu' or 'cuda'
+        (default: auto-detect)
+    --save-embeddings: Persist generated embeddings and metadata to disk
+    --save-dir: Directory where embedding files are written
+        (default: "benchmarking/data/embeddings")
+    --save-format: File format for saved embeddings
+        (choices: "npz", "npy")
     --normalize / --no-normalize: Whether to L2-normalize embeddings 
         (default: True)
 @Returns: argparse.Namespace with the parsed arguments.
@@ -46,9 +144,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run embedding benchmark pipeline.")
     parser.add_argument(
         "--model-type",
-        # choices=["sentence-transformer", "random"],
-            # add more choices here as we implement more model types
-
         default="sentence-transformer",
         help="Embedding backend to use.",
     )
@@ -77,6 +172,7 @@ def parse_args():
     parser.add_argument(
         "--save-embeddings",
         action="store_true",
+        default=False,
         help="Save generated embeddings and metadata to disk.",
     )
     parser.add_argument(
@@ -89,6 +185,50 @@ def parse_args():
         choices=["npz", "npy"],
         default="npz",
         help="File format for saved embeddings.",
+    )
+    parser.add_argument(
+        "--run-mirb",
+        action="store_true",
+        default=False,
+        help="Run MIRB evaluation after local embedding benchmark.",
+    )
+    parser.add_argument(
+        "--mirb-tasks",
+        default="MODupRetrieval",
+        # possible choices: 
+            # MSEDupRetrieval
+            # MODupRetrieval
+            # MathlibRetrieval
+            # ProofWikiPremiseRetrieval
+            # StacksPremiseRetrieval
+            # RealAnalysisPremiseRetrieval
+            # NumberTheoryPremiseRetrieval
+            # LeanPremiseRetrieval
+            # IsabellePremiseRetrieval
+            # HolPremiseRetrieval
+            # ProofWikiQARetrieval
+            # StacksQARetrieval
+            # MSEQARetrieval
+            # MSEFormulaRetrieval
+            # WikiFormulaRetrieval
+        help="Comma-separated MIRB task names to evaluate.",
+    )
+    parser.add_argument(
+        "--mirb-output-dir",
+        default="benchmarking/data/mirb_results",
+        help="Directory where MIRB outputs are written.",
+    )
+    parser.add_argument(
+        "--mirb-batch-size",
+        type=int,
+        default=16,
+        help="Batch size passed to MIRB encode kwargs.",
+    )
+    parser.add_argument(
+        "--mirb-max-length",
+        type=int,
+        default=4096,
+        help="Max token length passed to MIRB encode kwargs.",
     )
 
     # Mutually exclusive group for normalization options
@@ -107,6 +247,97 @@ def parse_args():
     )
     parser.set_defaults(normalize=True)
     return parser.parse_args()
+
+# TODO: what is this function for?
+def _slugify(value: str) -> str:
+    """
+    Convert a value into a filesystem-safe filename fragment.
+    """
+
+    safe_characters = []
+    for character in value:
+        if character.isalnum() or character in {"-", "_", "."}:
+            safe_characters.append(character)
+        else:
+            safe_characters.append("_")
+    slug = "".join(safe_characters).strip("._")
+    return slug or "model"
+
+# TODO: what is this function for?
+def save_embeddings(
+    save_dir: Path,
+    save_format: str,
+    model_instance,
+    latex_statements,
+    lean_code,
+    latex_embeddings: np.ndarray,
+    lean_embeddings: np.ndarray,
+    args,
+):
+    """
+    Save the generated embeddings and a manifest that describes how they were produced.
+    """
+
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    model_name = getattr(model_instance, "model_name", None)
+    if model_name is None and hasattr(model_instance, "metadata"):
+        model_name = getattr(model_instance.metadata, "name", None)
+    if model_name is None:
+        model_name = args.model_type
+
+    stem = f"{timestamp}_{_slugify(model_name)}_{'normalized' if args.normalize else 'raw'}"
+    manifest_path = save_dir / f"{stem}.json"
+
+    metadata = {
+        "model_type": args.model_type,
+        "model_name": model_name,
+        "normalized": args.normalize,
+        "batch_size": args.batch_size,
+        "max_items": args.max_items,
+        "device": args.device,
+        "save_format": save_format,
+        "embedding_shapes": {
+            "latex": list(latex_embeddings.shape),
+            "lean": list(lean_embeddings.shape),
+        },
+    }
+
+    if hasattr(model_instance, "metadata") and hasattr(model_instance.metadata, "to_dict"):
+        metadata["model_metadata"] = model_instance.metadata.to_dict()
+
+    manifest = {
+        "metadata": metadata,
+        "text_counts": {
+            "latex": len(latex_statements),
+            "lean": len(lean_code),
+        },
+        "files": {},
+    }
+
+    if save_format == "npz":
+        embeddings_path = save_dir / f"{stem}.npz"
+        np.savez_compressed(
+            embeddings_path,
+            latex_embeddings=latex_embeddings,
+            lean_embeddings=lean_embeddings,
+        )
+        manifest["files"]["embeddings"] = embeddings_path.name
+    else:
+        latex_path = save_dir / f"{stem}_latex.npy"
+        lean_path = save_dir / f"{stem}_lean.npy"
+        np.save(latex_path, latex_embeddings)
+        np.save(lean_path, lean_embeddings)
+        manifest["files"]["latex_embeddings"] = latex_path.name
+        manifest["files"]["lean_embeddings"] = lean_path.name
+
+    manifest["files"]["manifest"] = manifest_path.name
+
+    with manifest_path.open("w", encoding="utf-8") as manifest_file:
+        json.dump(manifest, manifest_file, indent=2, ensure_ascii=True)
+
+    return manifest_path
 
 
 def main():
@@ -157,6 +388,19 @@ def main():
     latex_embeddings = encoder_instance.encode(latex_statements)
     lean_embeddings = encoder_instance.encode(lean_code)
 
+    if args.save_embeddings:
+        manifest_path = save_embeddings(
+            Path(args.save_dir),
+            args.save_format,
+            model_instance,
+            latex_statements,
+            lean_code,
+            latex_embeddings,
+            lean_embeddings,
+            args,
+        )
+        print(f"Saved embeddings and manifest to {manifest_path.parent}")
+
     
     # print out timing and shapes of the resulting embeddings for debugging
     encoded = time.perf_counter()
@@ -172,10 +416,17 @@ def main():
     percent_correct = evaluation.compute_bitext_mining_metrics(index_pairs, [(i, i) for i in range(len(theorems))])
     print(f"Percent of correct pairs: {percent_correct['Percent Correct Pairs']:.2f}%")
 
+    if args.run_mirb:
+        mirb_start = time.perf_counter()
+        mirb_results = run_mirb_evaluation(args, model_instance)
+        mirb_elapsed = time.perf_counter() - mirb_start
+        print(f"MIRB evaluation completed in {mirb_elapsed:.2f}s")
+        if isinstance(mirb_results, dict):
+            print(f"MIRB tasks evaluated: {len(mirb_results)}")
+
     # pair_graph = evaluation.generate_pairing_eval_graph(index_pairs)
     # pair_graph.show()
     
-
 
 
 
