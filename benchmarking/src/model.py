@@ -16,7 +16,13 @@ class SentenceTransformerModel:
     Wrapper for sentence-transformers models.
     """
 
-    def __init__(self, model_name: str = "Qwen/Qwen3-Embedding-0.6B", metadata: Optional[ModelMetadata] = None, device: Optional[str] = None):
+    def __init__(
+        self,
+        model_name: str = "Qwen/Qwen3-Embedding-0.6B",
+        metadata: Optional[ModelMetadata] = None,
+        device: Optional[str] = None,
+        dtype: Optional[str] = None,
+    ):
         """
         @Parameters:
             model_name (str): Name or path of the sentence-transformers model
@@ -25,7 +31,26 @@ class SentenceTransformerModel:
 
         self.model_name = model_name
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = SentenceTransformer(model_name, device=self.device)
+        self.dtype = dtype
+
+        model_kwargs = {}
+        if dtype is not None:
+            dtype_map = {
+                "float16": torch.float16,
+                "bfloat16": torch.bfloat16,
+                "float32": torch.float32,
+                "float64": torch.float64,
+            }
+            if dtype not in dtype_map:
+                allowed = ", ".join(dtype_map.keys())
+                raise ValueError(f"Unsupported dtype '{dtype}'. Allowed values: {allowed}")
+            model_kwargs["torch_dtype"] = dtype_map[dtype]
+
+        self.model = SentenceTransformer(
+            model_name,
+            device=self.device,
+            model_kwargs=model_kwargs if model_kwargs else None,
+        )
         self.embedding_dim = self.model.get_sentence_embedding_dimension()
 
         # Get max sequence length if available

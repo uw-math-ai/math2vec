@@ -170,6 +170,12 @@ def parse_args():
         help="Force device, e.g. 'cpu' or 'cuda'. Defaults to auto-detect.",
     )
     parser.add_argument(
+        "--dtype",
+        choices=["float16", "bfloat16", "float32", "float64"],
+        default=None,
+        help="Optional torch dtype for sentence-transformer weights.",
+    )
+    parser.add_argument(
         "--save-embeddings",
         action="store_true",
         default=False,
@@ -293,6 +299,7 @@ def save_embeddings(
     metadata = {
         "model_type": args.model_type,
         "model_name": model_name,
+        "dtype": args.dtype,
         "normalized": args.normalize,
         "batch_size": args.batch_size,
         "max_items": args.max_items,
@@ -349,7 +356,11 @@ def main():
     if args.model_type == "random":
         model_instance = RandomEmbedder()
     else:
-        model_instance = SentenceTransformerModel(model_name=args.model_name, device=args.device)
+        model_instance = SentenceTransformerModel(
+            model_name=args.model_name,
+            device=args.device,
+            dtype=args.dtype,
+        )
     
     # intialize encoder instance here, passing in the model instance
     encoder_instance = Encoder(model_instance, batch_size=args.batch_size, normalize=args.normalize)
