@@ -14,7 +14,6 @@ conda activate /gpfs/projects/mathai/math2vec/envs/math2vec
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True # idk what this does
 
-
 time python benchmarking/src/main.py \
 --model-name Qwen/Qwen3-Embedding-0.6B
 --batch-size 4
