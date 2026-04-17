@@ -7,7 +7,6 @@ and give the sample theorems back to the main pipeline.
 
 from pathlib import Path
 import json
-from datasets import load_dataset
 
 
 
@@ -88,6 +87,15 @@ def load_frenzy_math(
     num_samples=None,
     columns: list[str] | None = None,
 ):
+    try:
+        from datasets import load_dataset
+    except ImportError as import_error:
+        raise ImportError(
+            "Failed to import Hugging Face datasets. "
+            "Install a compatible `datasets` / `huggingface_hub` pair before "
+            "running the FrenzyMath benchmark."
+        ) from import_error
+
     # Set default columns if none provided
     if columns is None:
         columns = ["signature", "informal_description"]
@@ -125,3 +133,86 @@ def load_frenzy_math(
 """
 def load_blueprints() -> list[dict]:
     return load_corpus(Path("dataset/blueprints.json"))
+
+
+def load_mathlib_informal_split(
+    split: str = "test",
+    dataset_name: str = "saharshb/mathlib-informal-split",
+    columns: list[str] | None = None,
+):
+    """
+    Load the split FrenzyMath dataset from Hugging Face.
+
+    By default this targets the public split dataset with train/val/test splits
+    so benchmarks can evaluate on a held-out set.
+    """
+
+    try:
+        from datasets import load_dataset
+    except ImportError as import_error:
+        raise ImportError(
+            "Failed to import Hugging Face datasets. "
+            "Install a compatible `datasets` / `huggingface_hub` pair before "
+            "running the FrenzyMath benchmark."
+        ) from import_error
+
+    if columns is None:
+        columns = ["informal_description", "type"]
+
+    ds = load_dataset(dataset_name, split=split)
+
+    missing_columns = [column for column in columns if column not in ds.column_names]
+    if missing_columns:
+        raise ValueError(
+            f"Requested columns not found in dataset: {missing_columns}. "
+            f"Available columns: {ds.column_names}"
+        )
+
+    return ds.select_columns(columns)
+
+
+def load_mathlib_informal_splits(
+    splits: list[str],
+    dataset_name: str = "saharshb/mathlib-informal-split",
+    columns: list[str] | None = None,
+):
+    """
+    Load one or more splits from the split FrenzyMath dataset and return them
+    separately as a mapping from split name to Dataset.
+    """
+
+    if not splits:
+        raise ValueError("At least one split must be provided.")
+
+    loaded = {}
+    for split in splits:
+        loaded[split] = load_mathlib_informal_split(
+            split=split,
+            dataset_name=dataset_name,
+            columns=columns,
+        )
+    return loaded
+
+
+def extract_informal_and_lean_from_hf_dataset(
+    dataset,
+    informal_key: str = "informal_description",
+    lean_key: str = "type",
+):
+    """
+    Convert a Hugging Face dataset into the pair format expected by the benchmark.
+    """
+
+    extracted = []
+    for row_index, record in enumerate(dataset):
+        informal = record.get(informal_key)
+        lean = record.get(lean_key)
+        if informal and lean:
+            extracted.append(
+                {
+                    "informal": informal,
+                    "lean": lean,
+                    "row_index": row_index,
+                }
+            )
+    return extracted

@@ -5,8 +5,6 @@ Models must implement an encode method and can optionally have metadata.
 
 import numpy as np
 from typing import List, Optional
-from sentence_transformers import SentenceTransformer
-import torch
 
 from meta import ModelMetadata
 
@@ -30,9 +28,17 @@ class SentenceTransformerModel:
         """
 
         self.model_name = model_name
+        try:
+            import torch
+            from sentence_transformers import SentenceTransformer
+        except ImportError as import_error:
+            raise ImportError(
+                "sentence-transformers is required to use "
+                "`--model-type sentence-transformer`."
+            ) from import_error
+
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = dtype
-
         model_kwargs = {}
         if dtype is not None:
             dtype_map = {
@@ -51,7 +57,10 @@ class SentenceTransformerModel:
             device=self.device,
             model_kwargs=model_kwargs if model_kwargs else None,
         )
-        self.embedding_dim = self.model.get_sentence_embedding_dimension()
+        if hasattr(self.model, "get_embedding_dimension"):
+            self.embedding_dim = self.model.get_embedding_dimension()
+        else:
+            self.embedding_dim = self.model.get_sentence_embedding_dimension()
 
         # Get max sequence length if available
         max_seq_len = None

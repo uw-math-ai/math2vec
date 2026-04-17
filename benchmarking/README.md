@@ -2,6 +2,15 @@
 
 This is the benchmark built for math2vec - a retrieval-focused text embedder evaluation framework.
 
+## FrenzyMath Benchmark
+
+The maintained benchmark for informal-language to Lean shared-space retrieval is:
+
+- runner: [`benchmarking/src/frenzymath_benchmark.py`](C:/Users/kedar/OneDrive/Desktop/OneDrive%20All%20Files/Documents/Playground/math2vec/benchmarking/src/frenzymath_benchmark.py)
+- full documentation: [`benchmarking/FRENZYMATH_BENCHMARK.md`](C:/Users/kedar/OneDrive/Desktop/OneDrive%20All%20Files/Documents/Playground/math2vec/benchmarking/FRENZYMATH_BENCHMARK.md)
+
+If you are trying to benchmark models on FrenzyMath, use that script and document, not the older blueprints-oriented pipeline below.
+
 ## Architecture Overview
 
 A retrieval-focused benchmark evaluates how well an embedding model can encode text such that semantically similar items are close in the embedding space, enabling effective retrieval of relevant documents given a query.
