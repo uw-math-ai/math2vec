@@ -68,6 +68,21 @@ def test_get_query_encode_kwargs_uses_direction_and_lean_field_specific_defaults
     assert lean_signature_kwargs == {"prompt": fb.DEFAULT_LEAN_SIGNATURE_TO_INFORMAL_QUERY_PROMPT}
 
 
+def test_build_progress_callback_reports_first_middle_and_last(caplog):
+    logger = logging.getLogger("progress-test")
+    caplog.set_level(logging.INFO, logger="progress-test")
+    callback = fb.build_progress_callback(logger, "Corpus encoding", total_texts=100)
+
+    callback({"batch_index": 1, "total_batches": 20, "batch_size": 5, "texts_encoded": 5, "total_texts": 100})
+    callback({"batch_index": 10, "total_batches": 20, "batch_size": 5, "texts_encoded": 50, "total_texts": 100})
+    callback({"batch_index": 20, "total_batches": 20, "batch_size": 5, "texts_encoded": 100, "total_texts": 100})
+
+    messages = [record.message for record in caplog.records]
+    assert any("5.0%" in message for message in messages)
+    assert any("50.0%" in message for message in messages)
+    assert any("100.0%" in message for message in messages)
+
+
 def test_compute_retrieval_summary_perfect_alignment():
     embeddings = np.asarray(
         [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],

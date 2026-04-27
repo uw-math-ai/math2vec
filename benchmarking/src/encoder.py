@@ -4,7 +4,7 @@ Takes a model and encodes text into embeddings.
 """
 
 import numpy as np
-from typing import List, Union
+from typing import Callable, List, Union
 
 
 class Encoder:
@@ -45,16 +45,29 @@ class Encoder:
             numpy.ndarray: Array of embeddings, shape (n_texts, embedding_dim)
         """
 
+        progress_callback = kwargs.pop("progress_callback", None)
+
         # Handle single text input
         if isinstance(texts, str):
             texts = [texts]
 
         # Encode in batches
         all_embeddings = []
-        for i in range(0, len(texts), self.batch_size):
+        total_batches = (len(texts) + self.batch_size - 1) // self.batch_size if texts else 0
+        for batch_index, i in enumerate(range(0, len(texts), self.batch_size), start=1):
             batch = texts[i : i + self.batch_size]
             batch_embeddings = self.model.encode(batch, **kwargs)
             all_embeddings.append(batch_embeddings)
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "batch_index": batch_index,
+                        "total_batches": total_batches,
+                        "batch_size": len(batch),
+                        "texts_encoded": min(i + len(batch), len(texts)),
+                        "total_texts": len(texts),
+                    }
+                )
 
         # Concatenate all batches
         embeddings = np.vstack(all_embeddings)

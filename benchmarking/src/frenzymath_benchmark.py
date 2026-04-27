@@ -391,6 +391,44 @@ def _aggregate(values: list[float]) -> float:
     return float(np.mean(values))
 
 
+def build_progress_callback(logger: logging.Logger, stage_name: str, total_texts: int):
+    stage_start = time.perf_counter()
+    report_interval_batches = None
+
+    def callback(progress: dict[str, int]) -> None:
+        nonlocal report_interval_batches
+        total_batches = progress["total_batches"]
+        if total_batches == 0:
+            return
+        if report_interval_batches is None:
+            report_interval_batches = max(1, total_batches // 20)
+
+        batch_index = progress["batch_index"]
+        should_report = (
+            batch_index == 1
+            or batch_index == total_batches
+            or batch_index % report_interval_batches == 0
+        )
+        if not should_report:
+            return
+
+        elapsed = time.perf_counter() - stage_start
+        texts_encoded = progress["texts_encoded"]
+        percent = texts_encoded / total_texts * 100 if total_texts > 0 else 100.0
+        logger.info(
+            "%s progress: %s/%s texts (%.1f%%), batch %s/%s, elapsed %.1fs",
+            stage_name,
+            texts_encoded,
+            total_texts,
+            percent,
+            batch_index,
+            total_batches,
+            elapsed,
+        )
+
+    return callback
+
+
 def _json_dump(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
@@ -811,8 +849,22 @@ def run_benchmark(args, logger: logging.Logger) -> dict[str, Any]:
     corpus_informal_texts = [row["informal"] for row in corpus_rows]
     corpus_lean_texts = [row["lean"] for row in corpus_rows]
 
-    corpus_informal_embeddings = encoder_instance.encode(corpus_informal_texts)
-    corpus_lean_embeddings = encoder_instance.encode(corpus_lean_texts)
+    corpus_informal_embeddings = encoder_instance.encode(
+        corpus_informal_texts,
+        progress_callback=build_progress_callback(
+            logger,
+            "Corpus informal encoding",
+            len(corpus_informal_texts),
+        ),
+    )
+    corpus_lean_embeddings = encoder_instance.encode(
+        corpus_lean_texts,
+        progress_callback=build_progress_callback(
+            logger,
+            "Corpus Lean encoding",
+            len(corpus_lean_texts),
+        ),
+    )
     encode_elapsed = time.perf_counter() - encode_start
 
     logger.info("Computing retrieval metrics.")
@@ -828,6 +880,11 @@ def run_benchmark(args, logger: logging.Logger) -> dict[str, Any]:
         informal_query_encode_kwargs = get_query_encode_kwargs(args, "informal_to_lean")
         query_informal_embeddings = encoder_instance.encode(
             query_informal_texts,
+            progress_callback=build_progress_callback(
+                logger,
+                "Query informal encoding",
+                len(query_informal_texts),
+            ),
             **informal_query_encode_kwargs,
         )
         informal_to_lean, informal_rankings, informal_scores = compute_retrieval_summary(
@@ -849,6 +906,11 @@ def run_benchmark(args, logger: logging.Logger) -> dict[str, Any]:
         lean_query_encode_kwargs = get_query_encode_kwargs(args, "lean_to_informal")
         query_lean_embeddings = encoder_instance.encode(
             query_lean_texts,
+            progress_callback=build_progress_callback(
+                logger,
+                "Query Lean encoding",
+                len(query_lean_texts),
+            ),
             **lean_query_encode_kwargs,
         )
         lean_to_informal, lean_rankings, lean_scores = compute_retrieval_summary(

@@ -389,6 +389,10 @@ The command-line invocation and run directory metadata.
 
 Human-readable run progress and stack traces if the run fails.
 
+For larger runs, this log now also includes periodic encoding progress updates
+for the longest stages, so you can see approximate percent-complete milestones
+without changing the benchmark behavior.
+
 ### `results.json`
 
 The main structured output. This includes:
