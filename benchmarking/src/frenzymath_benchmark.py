@@ -10,9 +10,7 @@ What this benchmark measures:
   `informal_description` <-> (`type` or `signature`)
 - It embeds every informal string and every Lean-side string independently.
 - It runs exact nearest-neighbor retrieval in a single shared embedding space.
-- It evaluates both directions:
-  1. informal -> Lean
-  2. Lean -> informal
+- It can evaluate either retrieval direction or both, depending on CLI settings.
 - Ground truth is exact row alignment only. Row i is relevant only to row i.
 
 Important design consequences:
@@ -22,6 +20,8 @@ Important design consequences:
 - Choosing `--lean-field type` versus `--lean-field signature` changes the task.
   `type` is usually richer and is the default. `signature` is shorter and may
   be easier or harder depending on the model.
+- Query instructions are direction-specific by default so instruction-aware
+  models such as Harrier receive the explicitly requested retrieval prompt.
 - By default the benchmark uses the held-out `test` split and L2-normalizes
   embeddings, which makes inner product equivalent to cosine similarity.
 - Retrieval uses exact search. When FAISS is installed it uses FAISS; otherwise
@@ -56,6 +56,22 @@ from model import RandomEmbedder, SentenceTransformerModel
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RESULTS_DIR = REPO_ROOT / "benchmarking" / "results" / "frenzymath"
 DEFAULT_TOP_K_VALUES = (1, 5, 10)
+DEFAULT_INFORMAL_TO_LEAN_TYPE_QUERY_PROMPT = (
+    "Instruct: Find the most mathematically similar Lean type to this statement\n"
+    "Query: "
+)
+DEFAULT_INFORMAL_TO_LEAN_SIGNATURE_QUERY_PROMPT = (
+    "Instruct: Find the most mathematically similar Lean signature to this statement\n"
+    "Query: "
+)
+DEFAULT_LEAN_TYPE_TO_INFORMAL_QUERY_PROMPT = (
+    "Instruct: Find the most mathematically similar statement as a Lean type\n"
+    "Query: "
+)
+DEFAULT_LEAN_SIGNATURE_TO_INFORMAL_QUERY_PROMPT = (
+    "Instruct: Find the most mathematically similar statement as a Lean signature\n"
+    "Query: "
+)
 
 
 @dataclass
@@ -63,6 +79,7 @@ class BenchmarkConfig:
     dataset_name: str
     query_split: str
     corpus_splits: list[str]
+    directions: list[str]
     informal_field: str
     lean_field: str
     model_type: str
@@ -76,6 +93,12 @@ class BenchmarkConfig:
     query_shuffle: bool
     corpus_shuffle: bool
     normalize: bool
+    informal_to_lean_query_prompt_name: str | None
+    informal_to_lean_type_query_prompt: str | None
+    informal_to_lean_signature_query_prompt: str | None
+    lean_to_informal_query_prompt_name: str | None
+    lean_type_to_informal_query_prompt: str | None
+    lean_signature_to_informal_query_prompt: str | None
     query_prompt_name: str | None
     query_prompt: str | None
     save_rankings: bool
@@ -89,8 +112,8 @@ def parse_args(argv: list[str] | None = None):
             "Lean statements in a shared embedding space."
         ),
         epilog=(
-            "Most important arguments: --model-name, --lean-field, --split, "
-            "--batch-size, --device, and --max-items."
+            "Most important arguments: --model-name, --directions, --lean-field, "
+            "--query-split, --corpus-splits, --batch-size, and --device."
         ),
     )
     parser.add_argument(
@@ -116,6 +139,15 @@ def parse_args(argv: list[str] | None = None):
         help=(
             "Comma-separated splits used as the retrieval corpus. "
             "Default: train,val,test."
+        ),
+    )
+    parser.add_argument(
+        "--directions",
+        default="informal_to_lean",
+        help=(
+            "Comma-separated retrieval directions to evaluate. "
+            "Allowed values: informal_to_lean, lean_to_informal. "
+            "Default: informal_to_lean."
         ),
     )
     parser.add_argument(
@@ -219,6 +251,54 @@ def parse_args(argv: list[str] | None = None):
         help="Save full top-k rankings and scores for each query direction.",
     )
     parser.add_argument(
+        "--informal-to-lean-query-prompt-name",
+        default=None,
+        help=(
+            "Optional sentence-transformers prompt_name used when the query side "
+            "is informal text and the corpus side is Lean."
+        ),
+    )
+    parser.add_argument(
+        "--informal-to-lean-type-query-prompt",
+        default=None,
+        help=(
+            "Raw instruction prompt used when retrieving Lean type from informal "
+            "queries. Defaults to the requested math-specific instruction."
+        ),
+    )
+    parser.add_argument(
+        "--informal-to-lean-signature-query-prompt",
+        default=None,
+        help=(
+            "Raw instruction prompt used when retrieving Lean signature from "
+            "informal queries. Defaults to the requested math-specific instruction."
+        ),
+    )
+    parser.add_argument(
+        "--lean-to-informal-query-prompt-name",
+        default=None,
+        help=(
+            "Optional sentence-transformers prompt_name used when the query side "
+            "is Lean and the corpus side is informal text."
+        ),
+    )
+    parser.add_argument(
+        "--lean-type-to-informal-query-prompt",
+        default=None,
+        help=(
+            "Raw instruction prompt used when retrieving informal statements from "
+            "Lean type queries. Defaults to the requested math-specific instruction."
+        ),
+    )
+    parser.add_argument(
+        "--lean-signature-to-informal-query-prompt",
+        default=None,
+        help=(
+            "Raw instruction prompt used when retrieving informal statements from "
+            "Lean signature queries. Defaults to the requested math-specific instruction."
+        ),
+    )
+    parser.add_argument(
         "--query-prompt-name",
         default=None,
         help=(
@@ -233,6 +313,15 @@ def parse_args(argv: list[str] | None = None):
     )
     args = parser.parse_args(argv)
     args.corpus_splits = [split.strip() for split in args.corpus_splits.split(",") if split.strip()]
+    args.directions = [direction.strip() for direction in args.directions.split(",") if direction.strip()]
+    if args.informal_to_lean_query_prompt_name is None and args.informal_to_lean_type_query_prompt is None:
+        args.informal_to_lean_type_query_prompt = DEFAULT_INFORMAL_TO_LEAN_TYPE_QUERY_PROMPT
+    if args.informal_to_lean_query_prompt_name is None and args.informal_to_lean_signature_query_prompt is None:
+        args.informal_to_lean_signature_query_prompt = DEFAULT_INFORMAL_TO_LEAN_SIGNATURE_QUERY_PROMPT
+    if args.lean_to_informal_query_prompt_name is None and args.lean_type_to_informal_query_prompt is None:
+        args.lean_type_to_informal_query_prompt = DEFAULT_LEAN_TYPE_TO_INFORMAL_QUERY_PROMPT
+    if args.lean_to_informal_query_prompt_name is None and args.lean_signature_to_informal_query_prompt is None:
+        args.lean_signature_to_informal_query_prompt = DEFAULT_LEAN_SIGNATURE_TO_INFORMAL_QUERY_PROMPT
     validate_args(args)
     return args
 
@@ -246,8 +335,39 @@ def validate_args(args) -> None:
         raise ValueError("--max-corpus-items must be positive when provided.")
     if not args.corpus_splits:
         raise ValueError("--corpus-splits must contain at least one split.")
+    allowed_directions = {"informal_to_lean", "lean_to_informal"}
+    invalid_directions = [direction for direction in args.directions if direction not in allowed_directions]
+    if invalid_directions:
+        raise ValueError(
+            f"Invalid direction(s): {invalid_directions}. "
+            "Allowed values are informal_to_lean and lean_to_informal."
+        )
+    if not args.directions:
+        raise ValueError("--directions must contain at least one direction.")
     if args.query_prompt_name is not None and args.query_prompt is not None:
         raise ValueError("Use only one of --query-prompt-name or --query-prompt.")
+    if (
+        args.informal_to_lean_query_prompt_name is not None
+        and (
+            args.informal_to_lean_type_query_prompt is not None
+            or args.informal_to_lean_signature_query_prompt is not None
+        )
+    ):
+        raise ValueError(
+            "Use only one of --informal-to-lean-query-prompt-name or "
+            "--informal-to-lean-*-query-prompt."
+        )
+    if (
+        args.lean_to_informal_query_prompt_name is not None
+        and (
+            args.lean_type_to_informal_query_prompt is not None
+            or args.lean_signature_to_informal_query_prompt is not None
+        )
+    ):
+        raise ValueError(
+            "Use only one of --lean-to-informal-query-prompt-name or "
+            "--lean-*-to-informal-query-prompt."
+        )
 
 
 def _slugify(value: str) -> str:
@@ -330,6 +450,7 @@ def benchmark_config_from_args(args) -> BenchmarkConfig:
         dataset_name=args.dataset_name,
         query_split=args.query_split,
         corpus_splits=list(args.corpus_splits),
+        directions=list(args.directions),
         informal_field=args.informal_field,
         lean_field=args.lean_field,
         model_type=args.model_type,
@@ -343,6 +464,12 @@ def benchmark_config_from_args(args) -> BenchmarkConfig:
         query_shuffle=args.query_shuffle,
         corpus_shuffle=args.corpus_shuffle,
         normalize=args.normalize,
+        informal_to_lean_query_prompt_name=args.informal_to_lean_query_prompt_name,
+        informal_to_lean_type_query_prompt=args.informal_to_lean_type_query_prompt,
+        informal_to_lean_signature_query_prompt=args.informal_to_lean_signature_query_prompt,
+        lean_to_informal_query_prompt_name=args.lean_to_informal_query_prompt_name,
+        lean_type_to_informal_query_prompt=args.lean_type_to_informal_query_prompt,
+        lean_signature_to_informal_query_prompt=args.lean_signature_to_informal_query_prompt,
         query_prompt_name=args.query_prompt_name,
         query_prompt=args.query_prompt,
         save_rankings=args.save_rankings,
@@ -469,6 +596,33 @@ def load_pairs(args):
     }
 
 
+def get_query_encode_kwargs(args, direction: str) -> dict[str, str]:
+    encode_kwargs: dict[str, str] = {}
+
+    if direction == "informal_to_lean":
+        if args.informal_to_lean_query_prompt_name is not None:
+            encode_kwargs["prompt_name"] = args.informal_to_lean_query_prompt_name
+        elif args.lean_field == "type" and args.informal_to_lean_type_query_prompt is not None:
+            encode_kwargs["prompt"] = args.informal_to_lean_type_query_prompt
+        elif args.lean_field == "signature" and args.informal_to_lean_signature_query_prompt is not None:
+            encode_kwargs["prompt"] = args.informal_to_lean_signature_query_prompt
+    elif direction == "lean_to_informal":
+        if args.lean_to_informal_query_prompt_name is not None:
+            encode_kwargs["prompt_name"] = args.lean_to_informal_query_prompt_name
+        elif args.lean_field == "type" and args.lean_type_to_informal_query_prompt is not None:
+            encode_kwargs["prompt"] = args.lean_type_to_informal_query_prompt
+        elif args.lean_field == "signature" and args.lean_signature_to_informal_query_prompt is not None:
+            encode_kwargs["prompt"] = args.lean_signature_to_informal_query_prompt
+
+    if not encode_kwargs:
+        if args.query_prompt_name is not None:
+            encode_kwargs["prompt_name"] = args.query_prompt_name
+        elif args.query_prompt is not None:
+            encode_kwargs["prompt"] = args.query_prompt
+
+    return encode_kwargs
+
+
 def compute_retrieval_summary(query_embeddings, corpus_embeddings, query_keys, corpus_keys):
     top_k_limit = min(max(DEFAULT_TOP_K_VALUES), len(corpus_embeddings))
     rankings, scores = retriever.retrieve_top_k(
@@ -552,7 +706,7 @@ def build_results_payload(
         },
         "design_decisions": {
             "retrieval_task": "exact aligned-pair retrieval",
-            "directions": ["informal_to_lean", "lean_to_informal"],
+            "directions": list(args.directions),
             "query_space": f"Queries come from the `{args.query_split}` split only.",
             "retrieval_corpus_space": "Retrieval corpus is built from these splits: " + ", ".join(args.corpus_splits),
             "normalization": (
@@ -608,6 +762,7 @@ def print_human_summary(results: dict[str, Any]) -> None:
     print(f"Dataset: {config['dataset_name']}")
     print(f"Query split: {config['query_split']}")
     print(f"Retrieval corpus splits: {', '.join(config['corpus_splits'])}")
+    print(f"Directions: {', '.join(config['directions'])}")
     print(f"Informal field: {config['informal_field']}")
     print(f"Lean field: {config['lean_field']}")
     print(f"Pairs evaluated: {dataset['evaluated_pairs']}")
@@ -653,46 +808,64 @@ def run_benchmark(args, logger: logging.Logger) -> dict[str, Any]:
         batch_size=args.batch_size,
         normalize=args.normalize,
     )
-    query_encode_kwargs = {}
-    if args.query_prompt_name is not None:
-        query_encode_kwargs["prompt_name"] = args.query_prompt_name
-    if args.query_prompt is not None:
-        query_encode_kwargs["prompt"] = args.query_prompt
-
-    query_informal_texts = [row["informal"] for row in query_rows]
-    query_lean_texts = [row["lean"] for row in query_rows]
     corpus_informal_texts = [row["informal"] for row in corpus_rows]
     corpus_lean_texts = [row["lean"] for row in corpus_rows]
 
-    query_informal_embeddings = encoder_instance.encode(query_informal_texts, **query_encode_kwargs)
-    query_lean_embeddings = encoder_instance.encode(query_lean_texts, **query_encode_kwargs)
     corpus_informal_embeddings = encoder_instance.encode(corpus_informal_texts)
     corpus_lean_embeddings = encoder_instance.encode(corpus_lean_texts)
     encode_elapsed = time.perf_counter() - encode_start
 
-    logger.info("Computing bidirectional retrieval metrics.")
+    logger.info("Computing retrieval metrics.")
     retrieval_start = time.perf_counter()
     query_keys = [row["row_key"] for row in query_rows]
     corpus_keys = [row["row_key"] for row in corpus_rows]
-    informal_to_lean, informal_rankings, informal_scores = compute_retrieval_summary(
-        query_informal_embeddings,
-        corpus_lean_embeddings,
-        query_keys=query_keys,
-        corpus_keys=corpus_keys,
-    )
-    lean_to_informal, lean_rankings, lean_scores = compute_retrieval_summary(
-        query_lean_embeddings,
-        corpus_informal_embeddings,
-        query_keys=query_keys,
-        corpus_keys=corpus_keys,
-    )
+    metrics_payload = {}
+    rankings_payload = {} if args.save_rankings else None
+
+    if "informal_to_lean" in args.directions:
+        logger.info("Evaluating informal_to_lean retrieval.")
+        query_informal_texts = [row["informal"] for row in query_rows]
+        informal_query_encode_kwargs = get_query_encode_kwargs(args, "informal_to_lean")
+        query_informal_embeddings = encoder_instance.encode(
+            query_informal_texts,
+            **informal_query_encode_kwargs,
+        )
+        informal_to_lean, informal_rankings, informal_scores = compute_retrieval_summary(
+            query_informal_embeddings,
+            corpus_lean_embeddings,
+            query_keys=query_keys,
+            corpus_keys=corpus_keys,
+        )
+        metrics_payload["informal_to_lean"] = informal_to_lean
+        if rankings_payload is not None:
+            rankings_payload["informal_to_lean"] = {
+                "rankings": informal_rankings,
+                "scores": informal_scores,
+            }
+
+    if "lean_to_informal" in args.directions:
+        logger.info("Evaluating lean_to_informal retrieval.")
+        query_lean_texts = [row["lean"] for row in query_rows]
+        lean_query_encode_kwargs = get_query_encode_kwargs(args, "lean_to_informal")
+        query_lean_embeddings = encoder_instance.encode(
+            query_lean_texts,
+            **lean_query_encode_kwargs,
+        )
+        lean_to_informal, lean_rankings, lean_scores = compute_retrieval_summary(
+            query_lean_embeddings,
+            corpus_informal_embeddings,
+            query_keys=query_keys,
+            corpus_keys=corpus_keys,
+        )
+        metrics_payload["lean_to_informal"] = lean_to_informal
+        if rankings_payload is not None:
+            rankings_payload["lean_to_informal"] = {
+                "rankings": lean_rankings,
+                "scores": lean_scores,
+            }
     retrieval_elapsed = time.perf_counter() - retrieval_start
 
     total_elapsed = time.perf_counter() - overall_start
-    metrics_payload = {
-        "informal_to_lean": informal_to_lean,
-        "lean_to_informal": lean_to_informal,
-    }
     timings = {
         "model_load": model_elapsed,
         "dataset_load": dataset_elapsed,
@@ -707,19 +880,6 @@ def run_benchmark(args, logger: logging.Logger) -> dict[str, Any]:
         metrics_payload=metrics_payload,
         timings=timings,
     )
-
-    rankings_payload = None
-    if args.save_rankings:
-        rankings_payload = {
-            "informal_to_lean": {
-                "rankings": informal_rankings,
-                "scores": informal_scores,
-            },
-            "lean_to_informal": {
-                "rankings": lean_rankings,
-                "scores": lean_scores,
-            },
-        }
 
     return {
         "results": results,

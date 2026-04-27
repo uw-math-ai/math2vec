@@ -32,6 +32,40 @@ def test_parse_args_defaults_to_test_queries_against_all_splits():
 
     assert args.query_split == "test"
     assert args.corpus_splits == ["train", "val", "test"]
+    assert args.directions == ["informal_to_lean"]
+    assert args.informal_to_lean_type_query_prompt == fb.DEFAULT_INFORMAL_TO_LEAN_TYPE_QUERY_PROMPT
+    assert args.informal_to_lean_signature_query_prompt == fb.DEFAULT_INFORMAL_TO_LEAN_SIGNATURE_QUERY_PROMPT
+    assert args.lean_type_to_informal_query_prompt == fb.DEFAULT_LEAN_TYPE_TO_INFORMAL_QUERY_PROMPT
+    assert args.lean_signature_to_informal_query_prompt == fb.DEFAULT_LEAN_SIGNATURE_TO_INFORMAL_QUERY_PROMPT
+
+
+def test_parse_args_rejects_per_direction_prompt_name_and_prompt_together():
+    with pytest.raises(ValueError, match="informal-to-lean-query-prompt-name"):
+        fb.parse_args(
+            [
+                "--informal-to-lean-query-prompt-name",
+                "bitext_query",
+                "--informal-to-lean-type-query-prompt",
+                "custom prompt",
+            ]
+        )
+
+
+def test_get_query_encode_kwargs_uses_direction_and_lean_field_specific_defaults():
+    args = fb.parse_args([])
+
+    informal_kwargs = fb.get_query_encode_kwargs(args, "informal_to_lean")
+    lean_kwargs = fb.get_query_encode_kwargs(args, "lean_to_informal")
+
+    assert informal_kwargs == {"prompt": fb.DEFAULT_INFORMAL_TO_LEAN_TYPE_QUERY_PROMPT}
+    assert lean_kwargs == {"prompt": fb.DEFAULT_LEAN_TYPE_TO_INFORMAL_QUERY_PROMPT}
+
+    signature_args = fb.parse_args(["--lean-field", "signature"])
+    informal_signature_kwargs = fb.get_query_encode_kwargs(signature_args, "informal_to_lean")
+    lean_signature_kwargs = fb.get_query_encode_kwargs(signature_args, "lean_to_informal")
+
+    assert informal_signature_kwargs == {"prompt": fb.DEFAULT_INFORMAL_TO_LEAN_SIGNATURE_QUERY_PROMPT}
+    assert lean_signature_kwargs == {"prompt": fb.DEFAULT_LEAN_SIGNATURE_TO_INFORMAL_QUERY_PROMPT}
 
 
 def test_compute_retrieval_summary_perfect_alignment():
@@ -117,6 +151,7 @@ def test_main_success_writes_run_artifacts(monkeypatch):
     assert results["run_status"] == "success"
     assert results["dataset"]["evaluated_pairs"] == 3
     assert results["config"]["corpus_splits"] == ["train", "val", "test"]
+    assert results["config"]["directions"] == ["informal_to_lean"]
     assert results["metrics"]["informal_to_lean"]["exact_match_at_1"] == pytest.approx(1.0)
 
 

@@ -35,10 +35,18 @@ If `--lean-field signature` is used, then the pair becomes:
 
 The benchmark embeds both sides separately and then runs exact nearest-neighbor retrieval in the shared embedding space.
 
-It evaluates both directions:
+It can evaluate:
 
 1. informal -> Lean
 2. Lean -> informal
+3. both directions in one run
+
+The current default is:
+
+- `informal_to_lean` only
+
+That default was chosen so the first Tilicum pilot run can directly match the
+requested “statement -> Lean type/signature” task without extra CLI changes.
 
 ## Query Space vs Retrieval Space
 
@@ -51,6 +59,7 @@ Default behavior:
 
 - query split: `test`
 - retrieval corpus splits: `train,val,test`
+- directions: `informal_to_lean`
 
 That means:
 
@@ -137,12 +146,25 @@ Why this matters:
 - retrieval is exact nearest-neighbor retrieval
 - FAISS is used when available
 - if FAISS is not installed, the code falls back to an exact NumPy similarity computation
+- instruction-aware models receive direction-and-task-specific default query prompts
+
+Default prompts:
+
+- `informal_to_lean` with `--lean-field type`:
+  `Instruct: Find the most mathematically similar Lean type to this statement`
+- `informal_to_lean` with `--lean-field signature`:
+  `Instruct: Find the most mathematically similar Lean signature to this statement`
+- `lean_to_informal` with `--lean-field type`:
+  `Instruct: Find the most mathematically similar statement as a Lean type`
+- `lean_to_informal` with `--lean-field signature`:
+  `Instruct: Find the most mathematically similar statement as a Lean signature`
 
 Why this matters:
 
 - normalization can materially affect rankings
 - exact search means scores are not confounded by approximate ANN settings
 - FAISS vs NumPy fallback should not change correctness, only performance
+- instruction-aware models can behave materially differently depending on the query instruction
 
 ### Metrics
 
@@ -154,10 +176,7 @@ The benchmark reports:
 - `Recall@10`
 - `MRR`
 
-for both:
-
-- `informal_to_lean`
-- `lean_to_informal`
+for whichever directions you ask it to run.
 
 Because there is exactly one relevant item per query in this setup:
 
@@ -249,6 +268,36 @@ Examples:
 python benchmarking/src/frenzymath_benchmark.py --corpus-splits train,val,test
 python benchmarking/src/frenzymath_benchmark.py --corpus-splits test
 ```
+
+### `--directions`
+
+This determines which retrieval direction(s) run.
+
+Examples:
+
+```bash
+python benchmarking/src/frenzymath_benchmark.py --directions informal_to_lean
+python benchmarking/src/frenzymath_benchmark.py --directions lean_to_informal
+python benchmarking/src/frenzymath_benchmark.py --directions informal_to_lean,lean_to_informal
+```
+
+### The 4 prompt args
+
+These control the raw instructions used for the 4 specific task variants:
+
+- `--informal-to-lean-type-query-prompt`
+- `--informal-to-lean-signature-query-prompt`
+- `--lean-type-to-informal-query-prompt`
+- `--lean-signature-to-informal-query-prompt`
+
+In most cases you should leave them alone unless you are intentionally changing
+ the task phrasing.
+
+### `--informal-to-lean-query-prompt-name` and `--lean-to-informal-query-prompt-name`
+
+These are optional sentence-transformers `prompt_name` settings. They are most
+ useful when a model ships with preconfigured prompt names and you want to use
+ those instead of raw custom instructions.
 
 ### `--batch-size`
 
@@ -403,10 +452,10 @@ Models such as Harrier are instruction-tuned for query encoding. For those, you 
 ```bash
 python benchmarking/src/frenzymath_benchmark.py \
   --model-name microsoft/harrier-oss-v1-0.6b \
+  --directions informal_to_lean \
   --query-split test \
   --corpus-splits train,val,test \
-  --lean-field type \
-  --query-prompt-name bitext_query
+  --lean-field type
 ```
 
 ## Cluster / Slurm Usage
@@ -446,6 +495,7 @@ For a main benchmark table intended for comparison across models, a good default
 - `--split test`
 - `--query-split test`
 - `--corpus-splits train,val,test`
+- `--directions informal_to_lean` for the first pilot requested here
 - `--lean-field type`
 - no `--max-query-items`
 - no `--max-corpus-items`
