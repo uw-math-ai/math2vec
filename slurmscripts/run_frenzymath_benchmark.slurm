@@ -12,18 +12,20 @@ source ~/.bashrc
 module load conda
 conda activate /gpfs/projects/mathai/math2vec/envs/math2vec
 
-cd /gpfs/projects/mathai/math2vec/math2vec
+REPO_DIR="${REPO_DIR:-/gpfs/projects/mathai/math2vec/math2vec}"
+cd "${REPO_DIR}"
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Override these at submission time if needed, for example:
-# sbatch --export=ALL,MODEL_NAME=BAAI/bge-large-en-v1.5,LEAN_FIELD=signature,BATCH_SIZE=8 slurmscripts/run_frenzymath_benchmark.slurm
-MODEL_NAME="${MODEL_NAME:-sentence-transformers/all-MiniLM-L6-v2}"
+# sbatch --export=ALL,MODEL_NAME=microsoft/harrier-oss-v1-0.6b,LEAN_FIELD=signature,BATCH_SIZE=8,RESULTS_DIR=/gpfs/projects/mathai/math2vec/runs/$USER/frenzymath slurmscripts/run_frenzymath_benchmark.slurm
+MODEL_NAME="${MODEL_NAME:-microsoft/harrier-oss-v1-0.6b}"
 LEAN_FIELD="${LEAN_FIELD:-type}"
 QUERY_SPLIT="${QUERY_SPLIT:-test}"
 CORPUS_SPLITS="${CORPUS_SPLITS:-train,val,test}"
 DIRECTIONS="${DIRECTIONS:-informal_to_lean}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
+RESULTS_DIR="${RESULTS_DIR:-/gpfs/projects/mathai/math2vec/runs/$USER/frenzymath}"
 DTYPE_FLAG="${DTYPE_FLAG:-}"
 MAX_QUERY_ITEMS_FLAG="${MAX_QUERY_ITEMS_FLAG:-}"
 MAX_CORPUS_ITEMS_FLAG="${MAX_CORPUS_ITEMS_FLAG:-}"
@@ -31,6 +33,24 @@ QUERY_PROMPT_NAME_FLAG="${QUERY_PROMPT_NAME_FLAG:-}"
 INFORMAL_TO_LEAN_QUERY_PROMPT_FLAG="${INFORMAL_TO_LEAN_QUERY_PROMPT_FLAG:-}"
 LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG="${LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG:-}"
 SAVE_RANKINGS_FLAG="${SAVE_RANKINGS_FLAG:-}"
+SAVE_EMBEDDINGS_FLAG="${SAVE_EMBEDDINGS_FLAG:-}"
+NO_SAVE_MANIFESTS_FLAG="${NO_SAVE_MANIFESTS_FLAG:-}"
+
+mkdir -p "${RESULTS_DIR}"
+
+echo "Job started at: $(date -u)"
+echo "Hostname: $(hostname)"
+echo "Repo dir: ${REPO_DIR}"
+echo "Results dir: ${RESULTS_DIR}"
+echo "Model: ${MODEL_NAME}"
+echo "Directions: ${DIRECTIONS}"
+echo "Lean field: ${LEAN_FIELD}"
+echo "Query split: ${QUERY_SPLIT}"
+echo "Corpus splits: ${CORPUS_SPLITS}"
+echo "Batch size: ${BATCH_SIZE}"
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nvidia-smi
+fi
 
 python benchmarking/src/frenzymath_benchmark.py \
   --model-name "${MODEL_NAME}" \
@@ -40,10 +60,13 @@ python benchmarking/src/frenzymath_benchmark.py \
   --corpus-splits "${CORPUS_SPLITS}" \
   --batch-size "${BATCH_SIZE}" \
   --device cuda \
+  --results-dir "${RESULTS_DIR}" \
   ${DTYPE_FLAG} \
   ${MAX_QUERY_ITEMS_FLAG} \
   ${MAX_CORPUS_ITEMS_FLAG} \
   ${QUERY_PROMPT_NAME_FLAG} \
   ${INFORMAL_TO_LEAN_QUERY_PROMPT_FLAG} \
   ${LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG} \
-  ${SAVE_RANKINGS_FLAG}
+  ${SAVE_RANKINGS_FLAG} \
+  ${SAVE_EMBEDDINGS_FLAG} \
+  ${NO_SAVE_MANIFESTS_FLAG}

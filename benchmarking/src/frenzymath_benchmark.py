@@ -31,6 +31,7 @@ Important design consequences:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import platform
@@ -102,6 +103,9 @@ class BenchmarkConfig:
     query_prompt_name: str | None
     query_prompt: str | None
     save_rankings: bool
+    save_manifests: bool
+    save_embeddings: bool
+    save_embeddings_dtype: str
     results_dir: str
 
 
@@ -249,6 +253,39 @@ def parse_args(argv: list[str] | None = None):
         action="store_true",
         default=False,
         help="Save full top-k rankings and scores for each query direction.",
+    )
+    parser.add_argument(
+        "--save-manifests",
+        action="store_true",
+        default=True,
+        help=(
+            "Save query/corpus row manifests with stable hashes and identifiers. "
+            "Enabled by default."
+        ),
+    )
+    parser.add_argument(
+        "--no-save-manifests",
+        dest="save_manifests",
+        action="store_false",
+        help="Disable saving query/corpus row manifests.",
+    )
+    parser.add_argument(
+        "--save-embeddings",
+        action="store_true",
+        default=False,
+        help=(
+            "Save encoded query/corpus embedding arrays for future re-analysis. "
+            "Disabled by default because files can be large."
+        ),
+    )
+    parser.add_argument(
+        "--save-embeddings-dtype",
+        choices=["float16", "float32"],
+        default="float32",
+        help=(
+            "Dtype used when saving embeddings to disk. "
+            "This does not affect retrieval math during the run."
+        ),
     )
     parser.add_argument(
         "--informal-to-lean-query-prompt-name",
@@ -511,6 +548,9 @@ def benchmark_config_from_args(args) -> BenchmarkConfig:
         query_prompt_name=args.query_prompt_name,
         query_prompt=args.query_prompt,
         save_rankings=args.save_rankings,
+        save_manifests=args.save_manifests,
+        save_embeddings=args.save_embeddings,
+        save_embeddings_dtype=args.save_embeddings_dtype,
         results_dir=args.results_dir,
     )
 
@@ -535,6 +575,7 @@ def dataset_to_rows(dataset, split_name: str, informal_key: str, lean_key: str):
                 "lean": record.get(lean_key),
                 "split": split_name,
                 "row_index_within_split": row_index,
+                "dataset_index": record.get("index"),
             }
         )
     return rows
@@ -661,6 +702,79 @@ def get_query_encode_kwargs(args, direction: str) -> dict[str, str]:
     return encode_kwargs
 
 
+def _hash_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def build_row_manifest_entry(row: dict[str, Any]) -> dict[str, Any]:
+    informal = row["informal"]
+    lean = row["lean"]
+    pair_payload = json.dumps(
+        {
+            "informal": informal,
+            "lean": lean,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return {
+        "row_key": row["row_key"],
+        "split": row["split"],
+        "row_index_within_split": row["row_index_within_split"],
+        "dataset_index": row.get("dataset_index"),
+        "informal_hash": _hash_text(informal),
+        "lean_hash": _hash_text(lean),
+        "pair_hash": _hash_text(pair_payload),
+        "informal_num_chars": len(informal),
+        "lean_num_chars": len(lean),
+    }
+
+
+def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        for record in records:
+            handle.write(json.dumps(record, ensure_ascii=True))
+            handle.write("\n")
+
+
+def save_manifests(run_dir: Path, pairing_metadata: dict[str, Any]) -> dict[str, str]:
+    query_manifest_path = run_dir / "query_manifest.jsonl"
+    corpus_manifest_path = run_dir / "corpus_manifest.jsonl"
+    _write_jsonl(
+        query_manifest_path,
+        [build_row_manifest_entry(row) for row in pairing_metadata["query_rows"]],
+    )
+    _write_jsonl(
+        corpus_manifest_path,
+        [build_row_manifest_entry(row) for row in pairing_metadata["corpus_rows"]],
+    )
+    return {
+        "query_manifest_file": str(query_manifest_path),
+        "corpus_manifest_file": str(corpus_manifest_path),
+    }
+
+
+def _cast_embeddings_for_save(embeddings: np.ndarray, dtype_name: str) -> np.ndarray:
+    dtype_map = {
+        "float16": np.float16,
+        "float32": np.float32,
+    }
+    return np.asarray(embeddings, dtype=dtype_map[dtype_name])
+
+
+def save_embedding_artifacts(
+    run_dir: Path,
+    dtype_name: str,
+    embedding_payload: dict[str, np.ndarray],
+) -> dict[str, str]:
+    saved_files = {}
+    for artifact_name, embeddings in embedding_payload.items():
+        path = run_dir / f"{artifact_name}.npy"
+        np.save(path, _cast_embeddings_for_save(embeddings, dtype_name))
+        saved_files[f"{artifact_name}_file"] = str(path)
+    return saved_files
+
+
 def compute_retrieval_summary(query_embeddings, corpus_embeddings, query_keys, corpus_keys):
     top_k_limit = min(max(DEFAULT_TOP_K_VALUES), len(corpus_embeddings))
     rankings, scores = retriever.retrieve_top_k(
@@ -724,6 +838,7 @@ def build_results_payload(
     pairing_metadata: dict[str, Any],
     metrics_payload: dict[str, Any],
     timings: dict[str, float],
+    artifact_paths: dict[str, str],
 ) -> dict[str, Any]:
     return {
         "benchmark_name": "frenzymath_shared_space_retrieval",
@@ -761,6 +876,7 @@ def build_results_payload(
         "environment": build_environment_metadata(model_instance),
         "metrics": metrics_payload,
         "timing_seconds": timings,
+        "artifact_paths": artifact_paths,
     }
 
 
@@ -774,6 +890,7 @@ def save_success_artifacts(run_dir: Path, results: dict[str, Any], rankings_payl
         "results_file": str(run_dir / "results.json"),
         "summary_file": str(run_dir / "summary.json"),
         "rankings_file": str(run_dir / "rankings.json") if rankings_payload is not None else None,
+        "artifact_paths": results.get("artifact_paths", {}),
     }
     _json_dump(run_dir.parent / "LATEST_RUN.json", latest_payload)
     (run_dir.parent / "LATEST_RUN.txt").write_text(str(run_dir), encoding="utf-8")
@@ -808,6 +925,10 @@ def print_human_summary(results: dict[str, Any]) -> None:
     print(f"Query rows dropped for missing corpus match: {dataset['query_dropped_rows_due_to_missing_corpus_match']}")
     print(f"Corpus rows dropped for empty/missing text: {dataset['corpus_dropped_rows_due_to_missing_or_empty_text']}")
     print(f"Retrieval backend: {results['environment']['retrieval_backend']}")
+    if results.get("artifact_paths"):
+        print("Extra artifacts saved:")
+        for artifact_name, artifact_path in sorted(results["artifact_paths"].items()):
+            print(f"  {artifact_name}: {artifact_path}")
     print()
 
     for direction, summary in results["metrics"].items():
@@ -820,7 +941,7 @@ def print_human_summary(results: dict[str, Any]) -> None:
         print()
 
 
-def run_benchmark(args, logger: logging.Logger) -> dict[str, Any]:
+def run_benchmark(args, logger: logging.Logger, run_dir: Path) -> dict[str, Any]:
     overall_start = time.perf_counter()
     logger.info("Loading model.")
     model_start = time.perf_counter()
@@ -873,6 +994,9 @@ def run_benchmark(args, logger: logging.Logger) -> dict[str, Any]:
     corpus_keys = [row["row_key"] for row in corpus_rows]
     metrics_payload = {}
     rankings_payload = {} if args.save_rankings else None
+    artifact_paths: dict[str, str] = {}
+    query_informal_embeddings = None
+    query_lean_embeddings = None
 
     if "informal_to_lean" in args.directions:
         logger.info("Evaluating informal_to_lean retrieval.")
@@ -896,6 +1020,8 @@ def run_benchmark(args, logger: logging.Logger) -> dict[str, Any]:
         metrics_payload["informal_to_lean"] = informal_to_lean
         if rankings_payload is not None:
             rankings_payload["informal_to_lean"] = {
+                "query_row_keys": list(query_keys),
+                "corpus_row_keys": list(corpus_keys),
                 "rankings": informal_rankings,
                 "scores": informal_scores,
             }
@@ -922,10 +1048,34 @@ def run_benchmark(args, logger: logging.Logger) -> dict[str, Any]:
         metrics_payload["lean_to_informal"] = lean_to_informal
         if rankings_payload is not None:
             rankings_payload["lean_to_informal"] = {
+                "query_row_keys": list(query_keys),
+                "corpus_row_keys": list(corpus_keys),
                 "rankings": lean_rankings,
                 "scores": lean_scores,
             }
     retrieval_elapsed = time.perf_counter() - retrieval_start
+
+    if args.save_manifests:
+        logger.info("Saving query/corpus manifests.")
+        artifact_paths.update(save_manifests(run_dir, pairing_metadata))
+
+    if args.save_embeddings:
+        logger.info("Saving embedding arrays as %s.", args.save_embeddings_dtype)
+        embedding_payload = {
+            "corpus_informal_embeddings": corpus_informal_embeddings,
+            "corpus_lean_embeddings": corpus_lean_embeddings,
+        }
+        if query_informal_embeddings is not None:
+            embedding_payload["query_informal_embeddings"] = query_informal_embeddings
+        if query_lean_embeddings is not None:
+            embedding_payload["query_lean_embeddings"] = query_lean_embeddings
+        artifact_paths.update(
+            save_embedding_artifacts(
+                run_dir,
+                args.save_embeddings_dtype,
+                embedding_payload,
+            )
+        )
 
     total_elapsed = time.perf_counter() - overall_start
     timings = {
@@ -941,6 +1091,7 @@ def run_benchmark(args, logger: logging.Logger) -> dict[str, Any]:
         pairing_metadata=pairing_metadata,
         metrics_payload=metrics_payload,
         timings=timings,
+        artifact_paths=artifact_paths,
     )
 
     return {
@@ -966,7 +1117,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         logger.info("Starting benchmark. Run directory: %s", run_dir)
-        payload = run_benchmark(args, logger)
+        payload = run_benchmark(args, logger, run_dir)
         results = payload["results"]
         rankings_payload = payload["rankings_payload"]
         save_success_artifacts(run_dir, results, rankings_payload)

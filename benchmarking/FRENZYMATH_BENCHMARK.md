@@ -339,6 +339,9 @@ These usually do not need to be changed unless you know why you want them.
 - `--shuffle`
 - `--seed`
 - `--save-rankings`
+- `--save-manifests` / `--no-save-manifests`
+- `--save-embeddings`
+- `--save-embeddings-dtype`
 - `--results-dir`
 - `--no-normalize`
 
@@ -357,10 +360,13 @@ Each run directory contains:
 - `run.log`
 - `results.json`
 - `summary.json`
+- `query_manifest.jsonl` by default
+- `corpus_manifest.jsonl` by default
 
 and optionally:
 
 - `rankings.json` if `--save-rankings` is used
+- `*.npy` embedding arrays if `--save-embeddings` is used
 
 The results root also contains:
 
@@ -417,6 +423,44 @@ A smaller file containing just the metric summaries.
 This contains the top-k retrieved row indices and similarity scores per query in each direction.
 It is useful for error analysis but can be large for big runs.
 
+The ranking payload also records the query and corpus `row_key` order used in
+that run, so the numeric indices can be mapped back to the manifest files.
+
+### `query_manifest.jsonl` and `corpus_manifest.jsonl`
+
+These files are saved by default and are meant as lightweight, stable run
+manifests. Each line records:
+
+- `row_key`
+- split and split-local row index
+- optional dataset-provided index when present
+- SHA-256 hashes for the informal text, Lean text, and the exact pair
+- character counts for both sides
+
+These manifests are useful for:
+
+- checking exactly which rows were evaluated
+- matching saved rankings back to dataset rows
+- comparing overlap across later dataset revisions without storing raw texts
+- laying groundwork for future embedding-cache reuse
+
+### Saved embedding arrays
+
+If `--save-embeddings` is used, the benchmark writes `.npy` arrays for the
+encoded query/corpus sides. This is optional because the files can be large.
+
+Default saved dtype:
+
+- `float32`
+
+You can override the on-disk dtype with:
+
+- `--save-embeddings-dtype float16`
+- `--save-embeddings-dtype float32`
+
+This only affects the saved artifact size; it does not change the retrieval
+math used during the benchmark run itself.
+
 ### `failure.json`
 
 A structured record of the exception type, message, traceback, and config.
@@ -462,6 +506,35 @@ python benchmarking/src/frenzymath_benchmark.py \
   --lean-field type
 ```
 
+Full Harrier run with rankings saved:
+
+```bash
+python benchmarking/src/frenzymath_benchmark.py \
+  --model-name microsoft/harrier-oss-v1-0.6b \
+  --directions informal_to_lean \
+  --query-split test \
+  --corpus-splits train,val,test \
+  --lean-field type \
+  --batch-size 16 \
+  --device cuda \
+  --save-rankings
+```
+
+Same run, additionally saving embedding arrays for possible later re-analysis:
+
+```bash
+python benchmarking/src/frenzymath_benchmark.py \
+  --model-name microsoft/harrier-oss-v1-0.6b \
+  --directions informal_to_lean \
+  --query-split test \
+  --corpus-splits train,val,test \
+  --lean-field type \
+  --batch-size 16 \
+  --device cuda \
+  --save-rankings \
+  --save-embeddings
+```
+
 ## Cluster / Slurm Usage
 
 There is a dedicated example Slurm script:
@@ -474,8 +547,25 @@ The most likely cluster-time adjustments are:
 - `--batch-size`
 - `--device cuda`
 - optional `--dtype float16` or `--dtype bfloat16`
+- optional `--save-rankings`
+- optional `--save-embeddings`
+- explicit `--results-dir`
 
 If a large model OOMs, first reduce `--batch-size`.
+
+For the current Harrier full run, the recommended serious-run setting is:
+
+- `--model-name microsoft/harrier-oss-v1-0.6b`
+- `--directions informal_to_lean`
+- `--query-split test`
+- `--corpus-splits train,val,test`
+- `--lean-field type`
+- no `--max-query-items`
+- no `--max-corpus-items`
+- `--save-rankings`
+
+Whether to also use `--save-embeddings` is a storage tradeoff, not a benchmark
+definition change.
 
 ## Recommended Reporting Practice
 

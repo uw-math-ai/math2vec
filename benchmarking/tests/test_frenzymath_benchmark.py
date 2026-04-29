@@ -83,6 +83,40 @@ def test_build_progress_callback_reports_first_middle_and_last(caplog):
     assert any("100.0%" in message for message in messages)
 
 
+def test_save_embedding_artifacts_and_manifests(writable_tmp_path):
+    run_dir = writable_tmp_path / "run"
+    run_dir.mkdir()
+    rows = [
+        {
+            "row_key": "test:0",
+            "split": "test",
+            "row_index_within_split": 0,
+            "dataset_index": None,
+            "informal": "desc1",
+            "lean": "type1",
+        }
+    ]
+
+    manifest_paths = fb.save_manifests(
+        run_dir,
+        {
+            "query_rows": rows,
+            "corpus_rows": rows,
+        },
+    )
+    embedding_paths = fb.save_embedding_artifacts(
+        run_dir,
+        "float32",
+        {
+            "corpus_informal_embeddings": np.asarray([[1.0, 2.0]], dtype=np.float32),
+        },
+    )
+
+    assert Path(manifest_paths["query_manifest_file"]).exists()
+    assert Path(manifest_paths["corpus_manifest_file"]).exists()
+    assert Path(embedding_paths["corpus_informal_embeddings_file"]).exists()
+
+
 def test_compute_retrieval_summary_perfect_alignment():
     embeddings = np.asarray(
         [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
@@ -114,9 +148,30 @@ def test_compute_retrieval_summary_perfect_alignment():
 
 def test_main_success_writes_run_artifacts(monkeypatch):
     pairs = [
-        {"informal": "desc1", "lean": "type1", "row_index": 0, "row_key": "test:0"},
-        {"informal": "desc2", "lean": "type2", "row_index": 1, "row_key": "test:1"},
-        {"informal": "desc3", "lean": "type3", "row_index": 2, "row_key": "test:2"},
+        {
+            "informal": "desc1",
+            "lean": "type1",
+            "row_index": 0,
+            "row_key": "test:0",
+            "split": "test",
+            "row_index_within_split": 0,
+        },
+        {
+            "informal": "desc2",
+            "lean": "type2",
+            "row_index": 1,
+            "row_key": "test:1",
+            "split": "test",
+            "row_index_within_split": 1,
+        },
+        {
+            "informal": "desc3",
+            "lean": "type3",
+            "row_index": 2,
+            "row_key": "test:2",
+            "split": "test",
+            "row_index_within_split": 2,
+        },
     ]
     dumped = {}
 
@@ -139,6 +194,14 @@ def test_main_success_writes_run_artifacts(monkeypatch):
     )
     monkeypatch.setattr(fb, "build_run_directory", lambda args: Path("fake-run-dir"))
     monkeypatch.setattr(fb, "setup_logging", lambda run_dir: logging.getLogger("test"))
+    monkeypatch.setattr(
+        fb,
+        "save_manifests",
+        lambda run_dir, pairing_metadata: {
+            "query_manifest_file": str(run_dir / "query_manifest.jsonl"),
+            "corpus_manifest_file": str(run_dir / "corpus_manifest.jsonl"),
+        },
+    )
     monkeypatch.setattr(
         fb,
         "_json_dump",
@@ -167,6 +230,8 @@ def test_main_success_writes_run_artifacts(monkeypatch):
     assert results["dataset"]["evaluated_pairs"] == 3
     assert results["config"]["corpus_splits"] == ["train", "val", "test"]
     assert results["config"]["directions"] == ["informal_to_lean"]
+    assert results["config"]["save_manifests"] is True
+    assert results["artifact_paths"]["query_manifest_file"].endswith("query_manifest.jsonl")
     assert results["metrics"]["informal_to_lean"]["exact_match_at_1"] == pytest.approx(1.0)
 
 
