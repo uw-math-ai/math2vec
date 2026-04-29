@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=frenzymath_benchmark
 #SBATCH --qos=normal
 #SBATCH --gpus=1
@@ -8,7 +8,6 @@
 
 set -euo pipefail
 
-source ~/.bashrc
 module load conda
 conda activate /gpfs/projects/mathai/math2vec/envs/math2vec
 
