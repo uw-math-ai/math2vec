@@ -30,94 +30,6 @@ GLOBAL VARIABLES
 """
 K = 10 # number of neighbors to retrieve, passed to retriever and evaluation functions 
 
-
-class MIRBModelAdapter:
-    """
-    Adapter that exposes the encoding interface expected by MIRB/MTEB.
-    """
-
-    def __init__(self, model_instance, batch_size: int, normalize: bool):
-        self.model_instance = model_instance
-        self.batch_size = batch_size
-        self.normalize = normalize
-
-    def _filter_model_kwargs(self, kwargs):
-        """
-        Keep only kwargs supported by the underlying SentenceTransformer model.
-
-        MIRB may pass task-specific kwargs (e.g., task_name, prompt_type, max_length)
-        that some models such as all-MiniLM-L6-v2 do not accept.
-        """
-        if not hasattr(self.model_instance, "model"):
-            return kwargs
-
-        model = self.model_instance.model
-        if not hasattr(model, "get_model_kwargs"):
-            return kwargs
-
-        accepted = set(model.get_model_kwargs())
-        return {key: value for key, value in kwargs.items() if key in accepted}
-
-    def encode(self, sentences, **kwargs):
-        encode_kwargs = {
-            "batch_size": kwargs.pop("batch_size", self.batch_size),
-            "normalize_embeddings": kwargs.pop("normalize_embeddings", self.normalize),
-        }
-        encode_kwargs.update(self._filter_model_kwargs(kwargs))
-
-        if hasattr(self.model_instance, "model"):
-            return self.model_instance.model.encode(sentences, convert_to_numpy=True, **encode_kwargs)
-        return self.model_instance.encode(sentences, **encode_kwargs)
-
-    def encode_queries(self, queries, **kwargs):
-        return self.encode(queries, **kwargs)
-
-    def encode_corpus(self, corpus, **kwargs):
-        if corpus and isinstance(corpus[0], dict):
-            flattened_corpus = []
-            for item in corpus:
-                title = item.get("title", "")
-                text = item.get("text", "")
-                flattened_corpus.append(f"{title} {text}".strip())
-            return self.encode(flattened_corpus, **kwargs)
-        return self.encode(corpus, **kwargs)
-
-
-def run_mirb_evaluation(args, model_instance):
-    """
-    Run MIRB evaluation via the MIRB-provided MTEB interface.
-    """
-
-    try:
-        mteb = importlib.import_module("mteb")
-    except ImportError as import_error:
-        raise ImportError(
-            "MIRB is not installed. Install with `pip install mirb` and retry."
-        ) from import_error
-
-    task_names = [task.strip() for task in args.mirb_tasks.split(",") if task.strip()]
-    if not task_names:
-        raise ValueError("--mirb-tasks must include at least one task name.")
-
-    model_name = getattr(model_instance, "model_name", args.model_type)
-    task_list = mteb.get_tasks(tasks=task_names)
-    evaluation = mteb.MTEB(tasks=task_list)
-    adapter = MIRBModelAdapter(model_instance, batch_size=args.batch_size, normalize=args.normalize)
-
-    output_folder = Path(args.mirb_output_dir) / _slugify(model_name)
-    print(f"Running MIRB on tasks: {', '.join(task_names)}")
-    print(f"MIRB output directory: {output_folder}")
-
-    return evaluation.run(
-        adapter,
-        output_folder=str(output_folder),
-        encode_kwargs={
-            "batch_size": args.mirb_batch_size,
-            "max_length": args.mirb_max_length,
-        },
-        save_predictions=True,
-    )
-
 """
 @Behavior: parse command line arguments for model selection, batch size, max items to process, normalization, device, and optional embedding saving.
 @Arguments:
@@ -192,51 +104,6 @@ def parse_args():
         default="npz",
         help="File format for saved embeddings.",
     )
-    parser.add_argument(
-        "--run-mirb",
-        action="store_true",
-        default=False,
-        help="Run MIRB evaluation after local embedding benchmark.",
-    )
-    parser.add_argument(
-        "--mirb-tasks",
-        default="MODupRetrieval",
-        # possible choices: 
-            # MSEDupRetrieval
-            # MODupRetrieval
-            # MathlibRetrieval
-            # ProofWikiPremiseRetrieval
-            # StacksPremiseRetrieval
-            # RealAnalysisPremiseRetrieval
-            # NumberTheoryPremiseRetrieval
-            # LeanPremiseRetrieval
-            # IsabellePremiseRetrieval
-            # HolPremiseRetrieval
-            # ProofWikiQARetrieval
-            # StacksQARetrieval
-            # MSEQARetrieval
-            # MSEFormulaRetrieval
-            # WikiFormulaRetrieval
-        help="Comma-separated MIRB task names to evaluate.",
-    )
-    parser.add_argument(
-        "--mirb-output-dir",
-        default="benchmarking/data/mirb_results",
-        help="Directory where MIRB outputs are written.",
-    )
-    parser.add_argument(
-        "--mirb-batch-size",
-        type=int,
-        default=16,
-        help="Batch size passed to MIRB encode kwargs.",
-    )
-    parser.add_argument(
-        "--mirb-max-length",
-        type=int,
-        default=4096,
-        help="Max token length passed to MIRB encode kwargs.",
-    )
-
     # Mutually exclusive group for normalization options
     normalize_group = parser.add_mutually_exclusive_group()
     normalize_group.add_argument(
@@ -384,7 +251,6 @@ def main():
     if not theorems:
         raise ValueError("No theorems loaded. Check the corpus JSON path/format.")
     
-
     # optionally limit the number of items to process for faster testing
     if args.max_items is not None:
         theorems = theorems[:args.max_items]
@@ -419,6 +285,7 @@ def main():
     print(f"Total elapsed time: {encoded - start:.2f}s")
 
     # find pairs of related embeddings using the pairing function in pairing.py
+    # TODO: 
     embedding_pairs, index_pairs = pairing.find_pairs(latex_embeddings, lean_embeddings, normalized=args.normalize)
         # this makes the pairing direction latex -> lean, since we search for nearest neighbors 
         # in the lean embedding space for each latex embedding
@@ -426,14 +293,6 @@ def main():
 
     percent_correct = evaluation.compute_bitext_mining_metrics(index_pairs, [(i, i) for i in range(len(theorems))])
     print(f"Percent of correct pairs: {percent_correct['Percent Correct Pairs']:.2f}%")
-
-    if args.run_mirb:
-        mirb_start = time.perf_counter()
-        mirb_results = run_mirb_evaluation(args, model_instance)
-        mirb_elapsed = time.perf_counter() - mirb_start
-        print(f"MIRB evaluation completed in {mirb_elapsed:.2f}s")
-        if isinstance(mirb_results, dict):
-            print(f"MIRB tasks evaluated: {len(mirb_results)}")
 
     # pair_graph = evaluation.generate_pairing_eval_graph(index_pairs)
     # pair_graph.show()
