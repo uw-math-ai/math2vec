@@ -9,16 +9,28 @@
     "shifted_statement": "Let A = (a_{ij}) ∈ ℝ^{n×n} with a_{ij} > 0. Then there exists r > 0 (the Perron–Frobenius eigenvalue) of algebraic multiplicity one such that |λ| > r for all other eigenvalues λ.",
     "statement_normalized": "If A is an n×n matrix with strictly positive entries, then there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector.",
     "shifted_statement_normalized": "Let A = (a_{ij}) ∈ ℝ^{n×n} with a_{ij} > 0. Then there exists r > 0 (the Perron–Frobenius eigenvalue) of algebraic multiplicity one such that |λ| > r for all other eigenvalues λ.",
-    "equivalent": null,
-    "confidence": null,
-    "rationale": "",
-    "assumptions_used": [],
-    "parse_status": "format_error",
-    "raw_model_output": "Answer:\n\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement mentions'strictly positive eigenvalue r' and'strictly positive eigenvector', while the shifted statement uses 'Perron–Frobenius eigenvalue' and 'algebraic multiplicity one'. The equivalence hinges on whether the eigenvalue is strictly positive and has a positive eigenvector, which the original statement does not explicitly state.\",\n  \"assumptions_used\": [],\n  \"parse_status\": \"ok\"\n}\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement specifies'strictly positive eigenvalue r' and'strictly positive eigenvector', while the shifted statement refers to 'Perron–Frobenius eigenvalue' and 'algebraic multiplicity one'. The equivalence depends on whether the eigenvalue is strictly positive and has a positive eigenvector, which the original statement does not explicitly state.\",\n  \"assumptions_used\": [],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json",
-    "latency_ms": 136166,
+    "equivalent": false,
+    "confidence": 0.0,
+    "rationale": "The shifted statement introduces a different definition of eigenvalues (Perron–Frobenius) and changes the structure of the eigenvalue's multiplicity and the condition on the eigenvector.",
+    "assumptions_used": [
+      "Assumptions for linear algebra and Perron–Frobenius theorem"
+    ],
+    "parse_status": "ok",
+    "parsed_model_output": {
+      "pair_id": "1",
+      "equivalent": false,
+      "confidence": 0.0,
+      "rationale": "The shifted statement introduces a different definition of eigenvalues (Perron–Frobenius) and changes the structure of the eigenvalue's multiplicity and the condition on the eigenvector.",
+      "assumptions_used": [
+        "Assumptions for linear algebra and Perron–Frobenius theorem"
+      ],
+      "parse_status": "ok"
+    },
+    "raw_model_output": "Answer:\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The shifted statement introduces a different definition of eigenvalues (Perron–Frobenius) and changes the structure of the eigenvalue's multiplicity and the condition on the eigenvector.\",\n  \"assumptions_used\": [\"Assumptions for linear algebra and Perron–Frobenius theorem\"],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The shifted statement introduces a different definition of eigenvalues (Perron–Frobenius) and changes the structure of the eigenvalue's multiplicity and the condition on the eigenvector.\",\n  \"assumptions_used\": [\"Assumptions for linear algebra and Perron–Frobenius theorem\"],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The shifted",
+    "latency_ms": 55284,
     "model_name": "Qwen/Qwen3-0.6B",
     "max_new_tokens": 256,
-    "retries": 1
+    "retries": 0
   },
   {
     "Input Statement": "If A is an n×n matrix with strictly positive entries, then there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector.",
@@ -31,12 +43,24 @@
     "statement_normalized": "If A is an n×n matrix with strictly positive entries, then there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector.",
     "shifted_statement_normalized": "Let $A = (a_{ij}) \\in \\mathbb{R}^{n \\times n}$ be a matrix with strictly positive entries. Then: 1. There exists a real number $r > 0$ such that $r = \\rho(A^T)$. 2. The eigenvalue $r$ is simple. 3. There exists an eigenvector $v$ such that $A v = r v$ and $v_i > 0$ for all $i$.",
     "equivalent": false,
-    "confidence": 0.5,
-    "rationale": "The original statement discusses a matrix with strictly positive entries and a simple, positive eigenvalue with a positive eigenvector. The shifted statement introduces a real number $r$ such that $r = \rho(A^T)$, which is a different mathematical concept. The eigenvalue $r$ is simple, and there exists an eigenvector $v$ with positive entries. However, the original statement's eigenvalue is a positive real number, while the shifted statement's $r$ is defined as the spectral radius, which is a different concept. The equivalence is thus not valid.",
-    "assumptions_used": [],
+    "confidence": 0.0,
+    "rationale": "The shifted statement introduces a new hypothesis (1. There exists a real number r > 0 such that r = ρ(A^T)) and a new conclusion (2. The eigenvalue r is simple) which are not equivalent to the original statement's content.",
+    "assumptions_used": [
+      "Assumptions used for the original statement"
+    ],
     "parse_status": "ok",
-    "raw_model_output": "Answer:\n\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement discusses a matrix with strictly positive entries and a simple, positive eigenvalue with a positive eigenvector. The shifted statement introduces a real number $r$ such that $r = \\rho(A^T)$, which is a different mathematical concept. The eigenvalue $r$ is simple, and there exists an eigenvector $v$ with positive entries. However, the original statement's eigenvalue is a positive real number, while the shifted statement's $r$ is defined as the spectral radius, which is a different concept. The equivalence is thus not valid.\",\n  \"assumptions_used\": [],\n  \"parse_status\": \"ok\"\n}\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement refers to a matrix with strictly positive entries and a simple, positive eigenvalue with a positive eigenvector. The shifted statement introduces a real number $r$ such that $r = \\rho(A^T)$, which is a different mathematical concept.",
-    "latency_ms": 44171,
+    "parsed_model_output": {
+      "pair_id": "1",
+      "equivalent": false,
+      "confidence": 0.0,
+      "rationale": "The shifted statement introduces a new hypothesis (1. There exists a real number r > 0 such that r = ρ(A^T)) and a new conclusion (2. The eigenvalue r is simple) which are not equivalent to the original statement's content.",
+      "assumptions_used": [
+        "Assumptions used for the original statement"
+      ],
+      "parse_status": "ok"
+    },
+    "raw_model_output": "Answer:\n\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The shifted statement introduces a new hypothesis (1. There exists a real number r > 0 such that r = ρ(A^T)) and a new conclusion (2. The eigenvalue r is simple) which are not equivalent to the original statement's content.\",\n  \"assumptions_used\": [\"Assumptions used for the original statement\"],\n  \"parse_status\": \"ok\"\n}\n\nAssumptions used for the original statement:\n[\"The original statement assumes that A is an n×n matrix with strictly positive entries and that there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector.\"]\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The shifted statement introduces a new hypothesis (1. There exists a real number r > 0 such that r = ρ(A^T)) and a new conclusion (2. The eigenvalue r is simple) which are not equivalent to the original statement's content.\",\n  \"assumptions_used\":",
+    "latency_ms": 53971,
     "model_name": "Qwen/Qwen3-0.6B",
     "max_new_tokens": 256,
     "retries": 0
@@ -51,16 +75,30 @@
     "shifted_statement": "Let $V$ and $W$ be vector spaces over a field $\\mathbb{F}$, and let $V$ be finite-dimensional. If $T: V \\to W$ is a linear transformation, then $\\dim(W) = \\operatorname{rank}(T) + \\operatorname{nullity}(T)$.",
     "statement_normalized": "If $V$ and $W$ are vector spaces over a field $\\mathbb{F}$ and $V$ is finite-dimensional and $T: V \\to W$ is a linear transformation then $\\dim(V) = \\operatorname{rank}(T) + \\operatorname{nullity}(T)$.",
     "shifted_statement_normalized": "Let $V$ and $W$ be vector spaces over a field $\\mathbb{F}$, and let $V$ be finite-dimensional. If $T: V \\to W$ is a linear transformation, then $\\dim(W) = \\operatorname{rank}(T) + \\operatorname{nullity}(T)$.",
-    "equivalent": null,
-    "confidence": null,
-    "rationale": "",
-    "assumptions_used": [],
-    "parse_status": "format_error",
-    "raw_model_output": "Answer:\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement states that the dimension of $V$ is equal to the rank plus nullity of $T$, while the shifted statement claims the dimension of $W$ is equal to the same. However, the original statement specifies $V$ is finite-dimensional, which is necessary for the rank-nullity theorem. The shifted statement does not mention $V$ being finite-dimensional, which is a key assumption. Therefore, the equivalence is not valid.\",\n  \"assumptions_used\": [\"V is finite-dimensional\"],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement specifies that $V$ is finite-dimensional, which is necessary for the rank-nullity theorem. The shifted statement does not mention $V$ being finite-dimensional, which is a key assumption. Therefore, the equivalence is not valid.\",\n  \"assumptions_used\": [\"V is finite-dimensional\"],\n  \"parse_status\": \"ok\"\n}\n``",
-    "latency_ms": 94301,
+    "equivalent": false,
+    "confidence": 0.0,
+    "rationale": "The original statement specifies that $V$ is finite-dimensional and $T: V \to W$ is a linear transformation, but the shifted statement does not mention the dimension of $V$ or $W$ in the conclusion. The conclusion is about $\\dim(V)$ and $\\dim(W)$, which are not directly related to the rank-nullity theorem unless $V$ and $W$ are the same. The shift introduces missing information about the dimensions of the spaces.",
+    "assumptions_used": [
+      "field",
+      "vector spaces"
+    ],
+    "parse_status": "ok",
+    "parsed_model_output": {
+      "pair_id": "1",
+      "equivalent": false,
+      "confidence": 0.0,
+      "rationale": "The original statement specifies that $V$ is finite-dimensional and $T: V \to W$ is a linear transformation, but the shifted statement does not mention the dimension of $V$ or $W$ in the conclusion. The conclusion is about $\\dim(V)$ and $\\dim(W)$, which are not directly related to the rank-nullity theorem unless $V$ and $W$ are the same. The shift introduces missing information about the dimensions of the spaces.",
+      "assumptions_used": [
+        "field",
+        "vector spaces"
+      ],
+      "parse_status": "ok"
+    },
+    "raw_model_output": "Answer:\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The original statement specifies that $V$ is finite-dimensional and $T: V \\to W$ is a linear transformation, but the shifted statement does not mention the dimension of $V$ or $W$ in the conclusion. The conclusion is about $\\dim(V)$ and $\\dim(W)$, which are not directly related to the rank-nullity theorem unless $V$ and $W$ are the same. The shift introduces missing information about the dimensions of the spaces.\",\n  \"assumptions_used\": [\"field\", \"vector spaces\"],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The original statement specifies that $V$ is finite-dimensional and $T: V \\to W$ is a linear transformation, but the shifted statement does not mention the dimension of $V$ or $W$ in the conclusion. The conclusion is about $\\dim(V)$ and $\\dim(W)$, which are not directly related to",
+    "latency_ms": 75729,
     "model_name": "Qwen/Qwen3-0.6B",
     "max_new_tokens": 256,
-    "retries": 1
+    "retries": 0
   },
   {
     "Input Statement": "If A is an n×n matrix with strictly positive entries, then there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector.",
@@ -73,12 +111,24 @@
     "statement_normalized": "If A is an n×n matrix with strictly positive entries, then there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector.",
     "shifted_statement_normalized": "Let A = (a_{ij}) ∈ ℝ^{n×n} with a_{ij} > 0. Then there exists r > 0 and an eigenvector v such that Av = rv, with Σ v_i >= 0, and Re(λ) < r for all other eigenvalues λ.",
     "equivalent": false,
-    "confidence": 0.5,
-    "rationale": "The original statement says that there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector. The shifted statement says there exists r > 0 and an eigenvector v such that Av = rv, with Σ v_i >= 0 and Re(λ) < r for all other eigenvalues. The original statement's condition on eigenvalue r being strictly maximal and eigenvector positive is not directly addressed in the shifted statement. The shifted statement includes a condition on the sum of eigenvectors and the real part of eigenvalues, which may not be equivalent.",
-    "assumptions_used": [],
+    "confidence": 0.0,
+    "rationale": "The original statement specifies that there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector. The shifted statement adds a condition on the eigenvector v and the eigenvalue λ, and requires that Re(λ) < r for all other eigenvalues. This introduces a new constraint on the eigenvalue and eigenvector, making the equivalence invalid.",
+    "assumptions_used": [
+      "A is a real matrix with strictly positive entries"
+    ],
     "parse_status": "ok",
-    "raw_model_output": "Answer:\n\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement says that there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector. The shifted statement says there exists r > 0 and an eigenvector v such that Av = rv, with Σ v_i >= 0 and Re(λ) < r for all other eigenvalues. The original statement's condition on eigenvalue r being strictly maximal and eigenvector positive is not directly addressed in the shifted statement. The shifted statement includes a condition on the sum of eigenvectors and the real part of eigenvalues, which may not be equivalent.\",\n  \"assumptions_used\": [],\n  \"parse_status\": \"ok\"\n}\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement specifies that the eigenvalue r is strictly maximal and has a positive eigenvector. The shifted statement mentions that there exists an eigenvector v such that Av = rv, with Σ v_i ≥ 0 and Re(λ)",
-    "latency_ms": 43836,
+    "parsed_model_output": {
+      "pair_id": "1",
+      "equivalent": false,
+      "confidence": 0.0,
+      "rationale": "The original statement specifies that there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector. The shifted statement adds a condition on the eigenvector v and the eigenvalue λ, and requires that Re(λ) < r for all other eigenvalues. This introduces a new constraint on the eigenvalue and eigenvector, making the equivalence invalid.",
+      "assumptions_used": [
+        "A is a real matrix with strictly positive entries"
+      ],
+      "parse_status": "ok"
+    },
+    "raw_model_output": "Answer:\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The original statement specifies that there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector. The shifted statement adds a condition on the eigenvector v and the eigenvalue λ, and requires that Re(λ) < r for all other eigenvalues. This introduces a new constraint on the eigenvalue and eigenvector, making the equivalence invalid.\",\n  \"assumptions_used\": [\"A is a real matrix with strictly positive entries\"],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The original statement specifies that there exists a simple, strictly maximal, positive eigenvalue r with a strictly positive eigenvector. The shifted statement adds a condition on the eigenvector v and the eigenvalue λ, and requires that Re(λ) < r for all other eigenvalues. This introduces a new constraint on the eigenvalue and eigenvector, making the equivalence invalid.\",\n  \"ass",
+    "latency_ms": 83205,
     "model_name": "Qwen/Qwen3-0.6B",
     "max_new_tokens": 256,
     "retries": 0
@@ -94,12 +144,20 @@
     "statement_normalized": "If G is a connected planar graph with n vertices and m edges, then any planar drawing of G results in f faces such that n − m + f = 2.",
     "shifted_statement_normalized": "Let G be a planar graph with n vertices and m edges. Every planar drawing of G has f faces satisfying n − m + f = 2.",
     "equivalent": false,
-    "confidence": 0.5,
-    "rationale": "The original statement says that any planar drawing of G results in f faces such that n − m + f = 2. The shifted statement says that every planar drawing of G has f faces satisfying n − m + f = 2. However, the original statement's condition is that G is a connected planar graph, while the shifted statement does not mention connectedness. This difference in the condition (connectedness) makes them not equivalent.",
+    "confidence": 0.0,
+    "rationale": "The original statement says 'any planar drawing of G results in f faces such that n − m + f = 2', while the shifted statement says 'Every planar drawing of G has f faces satisfying n − m + f = 2'. The original statement is a general statement about any planar drawing, while the shifted statement is a specific statement about every planar drawing. The original statement does not mention that the drawing is a specific type (e.g., a planar drawing), but the shifted statement does. This is a clear difference in the scope of the statement.",
     "assumptions_used": [],
     "parse_status": "ok",
-    "raw_model_output": "Answer:\n\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement says that any planar drawing of G results in f faces such that n − m + f = 2. The shifted statement says that every planar drawing of G has f faces satisfying n − m + f = 2. However, the original statement's condition is that G is a connected planar graph, while the shifted statement does not mention connectedness. This difference in the condition (connectedness) makes them not equivalent.\",\n  \"assumptions_used\": [],\n  \"parse_status\": \"ok\"\n}\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement says that any planar drawing of G results in f faces such that n − m + f = 2. The shifted statement says that every planar drawing of G has f faces satisfying n − m + f = 2. However, the original statement's condition is that G is a connected planar graph, while the shifted statement does not mention connectedness. This difference in the",
-    "latency_ms": 37062,
+    "parsed_model_output": {
+      "pair_id": "1",
+      "equivalent": false,
+      "confidence": 0.0,
+      "rationale": "The original statement says 'any planar drawing of G results in f faces such that n − m + f = 2', while the shifted statement says 'Every planar drawing of G has f faces satisfying n − m + f = 2'. The original statement is a general statement about any planar drawing, while the shifted statement is a specific statement about every planar drawing. The original statement does not mention that the drawing is a specific type (e.g., a planar drawing), but the shifted statement does. This is a clear difference in the scope of the statement.",
+      "assumptions_used": [],
+      "parse_status": "ok"
+    },
+    "raw_model_output": "Answer:\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The original statement says 'any planar drawing of G results in f faces such that n − m + f = 2', while the shifted statement says 'Every planar drawing of G has f faces satisfying n − m + f = 2'. The original statement is a general statement about any planar drawing, while the shifted statement is a specific statement about every planar drawing. The original statement does not mention that the drawing is a specific type (e.g., a planar drawing), but the shifted statement does. This is a clear difference in the scope of the statement.\",\n  \"assumptions_used\": [],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The original statement says 'any planar drawing of G results in f faces such that n − m + f = 2', while the shifted statement says 'Every planar drawing of G has f faces satisfying n − m + f = ",
+    "latency_ms": 84370,
     "model_name": "Qwen/Qwen3-0.6B",
     "max_new_tokens": 256,
     "retries": 0
@@ -114,16 +172,28 @@
     "shifted_statement": "Let $G = (V, E)$ be a finite, simple, connected, planar graph with $v = |V|$ vertices and $e = |E|$ edges. Then: (C1) $v - e + f = 2$; (C2) if $v \\ge 3$ and $G$ is not bipartite, then $e > 3v - 6$; (C3) if $v \\ge 3$ and $G$ is triangle-free, then $e \\le 2v - 4$; (C4) $\\delta(G) \\le 5$.",
     "statement_normalized": "If $G = (V, E)$ is a finite, simple graph and $G$ is connected and $G$ is planar then $v - e + f = 2$ and $e \\le 3v - 6$ (for $v \\ge 3$) and $e \\le 2v - 4$ (for $v \\ge 3$ and triangle-free $G$) and $\\delta(G) \\le 5$.",
     "shifted_statement_normalized": "Let $G = (V, E)$ be a finite, simple, connected, planar graph with $v = |V|$ vertices and $e = |E|$ edges. Then: (C1) $v - e + f = 2$; (C2) if $v \\ge 3$ and $G$ is not bipartite, then $e > 3v - 6$; (C3) if $v \\ge 3$ and $G$ is triangle-free, then $e \\le 2v - 4$; (C4) $\\delta(G) \\le 5$.",
-    "equivalent": null,
-    "confidence": null,
-    "rationale": "",
-    "assumptions_used": [],
-    "parse_status": "format_error",
-    "raw_model_output": "Answer:\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement includes additional conditions (e.g., $v \\ge 3$) and different constraints on $e$ (e.g., $e \\le 3v - 6$ and $e \\le 2v - 4$) that are not explicitly covered in the shifted statement. The shifted statement does not include the $v \\ge 3$ condition for $e$ and does not specify triangle-free conditions for $e \\le 2v - 4$.\",\n  \"assumptions_used\": [\"v >= 3\"],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement includes additional conditions (e.g., $v \\ge 3$) and different constraints on $e$ (e.g., $e \\le 3v - 6$ and $e \\le 2v - 4$) that are not explicitly covered in the",
-    "latency_ms": 98278,
+    "equivalent": false,
+    "confidence": 0.0,
+    "rationale": "The original statement includes additional constraints (e.g., $v \\ge 3$ and triangle-free) that are not present in the shifted statement. The shifted statement does not mention these constraints, leading to a potential difference in the logical structure.",
+    "assumptions_used": [
+      "Assumptions for finite, simple, connected, planar graphs"
+    ],
+    "parse_status": "ok",
+    "parsed_model_output": {
+      "pair_id": "1",
+      "equivalent": false,
+      "confidence": 0.0,
+      "rationale": "The original statement includes additional constraints (e.g., $v \\ge 3$ and triangle-free) that are not present in the shifted statement. The shifted statement does not mention these constraints, leading to a potential difference in the logical structure.",
+      "assumptions_used": [
+        "Assumptions for finite, simple, connected, planar graphs"
+      ],
+      "parse_status": "ok"
+    },
+    "raw_model_output": "Answer:\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The original statement includes additional constraints (e.g., $v \\ge 3$ and triangle-free) that are not present in the shifted statement. The shifted statement does not mention these constraints, leading to a potential difference in the logical structure.\",\n  \"assumptions_used\": [\"Assumptions for finite, simple, connected, planar graphs\"],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The original statement includes additional constraints (e.g., $v \\ge 3$ and triangle-free) that are not present in the shifted statement. The shifted statement does not mention these constraints, leading to a potential difference in the logical structure.\",\n  \"assumptions_used\": [\"Assumptions for finite, simple, connected, planar graphs\"],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence",
+    "latency_ms": 86838,
     "model_name": "Qwen/Qwen3-0.6B",
     "max_new_tokens": 256,
-    "retries": 1
+    "retries": 0
   },
   {
     "Input Statement": "If $G = (V, E)$ is a finite, simple graph and $G$ is connected and $G$ is planar then $v - e + f = 2$ and $e \\le 3v - 6$ (for $v \\ge 3$) and $e \\le 2v - 4$ (for $v \\ge 3$ and triangle-free $G$) and $\\delta(G) \\le 5$.",
@@ -136,14 +206,24 @@
     "statement_normalized": "If $G = (V, E)$ is a finite, simple graph and $G$ is connected and $G$ is planar then $v - e + f = 2$ and $e \\le 3v - 6$ (for $v \\ge 3$) and $e \\le 2v - 4$ (for $v \\ge 3$ and triangle-free $G$) and $\\delta(G) \\le 5$.",
     "shifted_statement_normalized": "Let $G = (V, E)$ be a finite, simple, connected, planar graph with $v = |V|$ vertices and $e = |E|$ edges. Then: (C1) $v - e + f = 2$; (C2) if $v \\ge 3$ and $G$ is not planar, then $e \\neq 3$.",
     "equivalent": false,
-    "confidence": 0.5,
-    "rationale": "The original statement includes additional conditions (e.g., triangle-free) and different constraints on $e$ (e ≤ 3v - 6 and e ≤ 2v - 4) that are not explicitly covered in the shifted statement. The shifted statement introduces a condition about non-planar graphs and their edge count, which are not directly related to the original problem's planarity and connectedness.",
+    "confidence": 0.0,
+    "rationale": "The original statement includes additional constraints (e.g., $v \\ge 3$ and triangle-free) that are not present in the shifted statement, which is a direct restatement of the original but with a different conclusion.",
     "assumptions_used": [
-      "simple graph"
+      "Assumptions for finite, simple, connected, planar graphs"
     ],
     "parse_status": "ok",
-    "raw_model_output": "Answer:\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement includes additional conditions (e.g., triangle-free) and different constraints on $e$ (e ≤ 3v - 6 and e ≤ 2v - 4) that are not explicitly covered in the shifted statement. The shifted statement introduces a condition about non-planar graphs and their edge count, which are not directly related to the original problem's planarity and connectedness.\",\n  \"assumptions_used\": [\"simple graph\"],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.5,\n  \"rationale\": \"The original statement includes additional conditions (e.g., triangle-free) and different constraints on $e$ (e ≤ 3v - 6 and e ≤ 2v - 4) that are not explicitly covered in the shifted statement. The shifted statement introduces a condition about non-planar graphs and their edge count, which are not directly related to the original problem's planarity and connectedness.\",\n  \"",
-    "latency_ms": 43832,
+    "parsed_model_output": {
+      "pair_id": "1",
+      "equivalent": false,
+      "confidence": 0.0,
+      "rationale": "The original statement includes additional constraints (e.g., $v \\ge 3$ and triangle-free) that are not present in the shifted statement, which is a direct restatement of the original but with a different conclusion.",
+      "assumptions_used": [
+        "Assumptions for finite, simple, connected, planar graphs"
+      ],
+      "parse_status": "ok"
+    },
+    "raw_model_output": "Answer:\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The original statement includes additional constraints (e.g., $v \\ge 3$ and triangle-free) that are not present in the shifted statement, which is a direct restatement of the original but with a different conclusion.\",\n  \"assumptions_used\": [\"Assumptions for finite, simple, connected, planar graphs\"],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"rationale\": \"The original statement includes additional constraints (e.g., $v \\ge 3$ and triangle-free) that are not present in the shifted statement, which is a direct restatement of the original but with a different conclusion.\",\n  \"assumptions_used\": [\"Assumptions for finite, simple, connected, planar graphs\"],\n  \"parse_status\": \"ok\"\n}\n```\n\n```json\n{\n  \"pair_id\": \"1\",\n  \"equivalent\": false,\n  \"confidence\": 0.0,\n  \"",
+    "latency_ms": 82090,
     "model_name": "Qwen/Qwen3-0.6B",
     "max_new_tokens": 256,
     "retries": 0

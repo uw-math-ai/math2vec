@@ -12,7 +12,7 @@ from typing import Any
 
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
-DEFAULT_MODEL_NAME = "Qwen/Qwen3-0.6B"
+DEFAULT_MODEL_NAME = "Qwen/Qwen3-8B"  # Qwen3-8B-Instruct is the smallest Qwen model, and should be fast to load and run on a single GPU.
 
 
 def load_qwen_model(model_name: str = DEFAULT_MODEL_NAME) -> Any:

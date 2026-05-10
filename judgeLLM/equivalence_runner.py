@@ -24,6 +24,15 @@ DEFAULT_INPUT_PATH = Path(__file__).with_name("hard_negatives.json")
 DEFAULT_OUTPUT_PATH = Path(__file__).with_name("equivalence_results.json")
 DEFAULT_PROMPT_PATH = Path(__file__).with_name("equivalence_prompt.md")
 
+EXPECTED_RESPONSE_KEYS = {
+	"pair_id",
+	"equivalent",
+	"confidence",
+	"rationale",
+	"assumptions_used",
+	"parse_status",
+}
+
 # loads text from a file
 # expects input .json file to be an array of objects
 def load_text(path: Path) -> str:
@@ -62,7 +71,7 @@ def build_prompt(template: str, statement: str, shifted_statement: str) -> str:
 		template.replace("{{statement}}", statement).replace("{{shifted_statement}}", shifted_statement)
 	)
 
-# Strips code fences and extra whitespace from the model output
+# Strips code fences and extra whitespace from the model output.
 def strip_code_fences(text: str) -> str:
 	cleaned = text.strip()
 	if cleaned.startswith("```"):
@@ -70,53 +79,148 @@ def strip_code_fences(text: str) -> str:
 		cleaned = re.sub(r"\s*```$", "", cleaned)
 	return cleaned.strip()
 
-# Attempts to extract a JSON object from the model output, even if it's wrapped in text or code fences.
-def extract_json_object(text: str) -> dict[str, Any]:
+
+def extract_first_json_object(text: str) -> str | None:
+	"""Return the first balanced JSON object substring, ignoring surrounding text."""
+
 	cleaned = strip_code_fences(text)
-	if not cleaned:
-		raise ValueError("Empty model output.")
+	start = cleaned.find("{")
+	if start == -1:
+		return None
 
-	try:
-		return json.loads(cleaned)
-	except json.JSONDecodeError:
-		start = cleaned.find("{")
-		end = cleaned.rfind("}")
-		if start == -1 or end == -1 or end <= start:
-			raise
-		return json.loads(cleaned[start : end + 1])
+	depth = 0
+	in_string = False
+	escape = False
+	for index in range(start, len(cleaned)):
+		char = cleaned[index]
+		if in_string:
+			if escape:
+				escape = False
+			elif char == "\\":
+				escape = True
+			elif char == '"':
+				in_string = False
+			continue
 
-# Normalizes the "equivalent" value from the model output to a boolean or "Underspecified".
-def normalize_equivalent_value(parsed: dict[str, Any]) -> Any:
-	value = parsed.get("equivalent", parsed.get("label"))
-	if isinstance(value, bool) or value == "Underspecified":
+		if char == '"':
+			in_string = True
+		elif char == "{":
+			depth += 1
+		elif char == "}":
+			depth -= 1
+			if depth == 0:
+				return cleaned[start : index + 1]
+
+	return None
+
+
+def repair_json_string_escapes(text: str) -> str:
+	"""Escape stray backslashes inside JSON strings while preserving valid escapes."""
+
+	valid_escape_chars = {'"', "\\", "/", "b", "f", "n", "r", "t", "u"}
+	result: list[str] = []
+	in_string = False
+	index = 0
+	while index < len(text):
+		char = text[index]
+		if not in_string:
+			result.append(char)
+			if char == '"':
+				in_string = True
+			index += 1
+			continue
+
+		if char == "\\":
+			next_char = text[index + 1] if index + 1 < len(text) else ""
+			if next_char in valid_escape_chars:
+				result.append(char)
+				index += 1
+				if index < len(text):
+					result.append(text[index])
+					if text[index] == '"':
+						in_string = False
+				index += 1
+				continue
+			result.append("\\\\")
+			index += 1
+			continue
+
+		result.append(char)
+		if char == '"':
+			in_string = False
+		index += 1
+
+	return "".join(result)
+
+
+def coerce_equivalent_value(value: Any) -> bool | str:
+	if isinstance(value, bool):
 		return value
 	if isinstance(value, str):
 		lowered = value.strip().lower()
-		if lowered in {"true", "equivalent", "yes"}:
+		if lowered in {"true", "equivalent", "yes", "true,"}:
 			return True
-		if lowered in {"false", "not equivalent", "no"}:
+		if lowered in {"false", "not equivalent", "no", "false,"}:
 			return False
-		if lowered in {"underspecified", "unknown", "ambiguous"}:
+		if lowered == "underspecified":
 			return "Underspecified"
-	return value
+	raise ValueError("equivalent must be a boolean or 'Underspecified'.")
 
-# Normalizes the "assumptions_used" field to a list of strings, handling both string and list inputs.
-def normalize_assumptions(value: Any) -> list[str]:
+
+def coerce_assumptions(value: Any) -> list[str]:
+	if value is None:
+		return []
 	if isinstance(value, list):
 		return [str(item) for item in value]
 	if isinstance(value, str) and value.strip():
 		return [value.strip()]
-	return []
+	raise ValueError("assumptions_used must be a list of strings.")
 
-# Parses the model's raw output and returns a tuple of (parsed_dict_or_none, status_string).
+
+def validate_parsed_response(parsed: dict[str, Any]) -> dict[str, Any]:
+	missing_keys = EXPECTED_RESPONSE_KEYS.difference(parsed)
+	if missing_keys:
+		raise ValueError(f"Missing required keys: {sorted(missing_keys)}")
+
+	validated = {
+		"pair_id": str(parsed["pair_id"]),
+		"equivalent": coerce_equivalent_value(parsed["equivalent"]),
+		"confidence": float(parsed["confidence"]),
+		"rationale": str(parsed["rationale"]),
+		"assumptions_used": coerce_assumptions(parsed["assumptions_used"]),
+		"parse_status": str(parsed["parse_status"]),
+	}
+
+	if validated["parse_status"] not in {"ok", "format_error"}:
+		raise ValueError("parse_status must be 'ok' or 'format_error'.")
+	if not 0.0 <= validated["confidence"] <= 1.0:
+		raise ValueError("confidence must be between 0.0 and 1.0.")
+	return validated
+
+
+def extract_json_object(text: str) -> dict[str, Any]:
+	first_object = extract_first_json_object(text)
+	if first_object is None:
+		raise ValueError("No JSON object found in model output.")
+
+	try:
+		parsed = json.loads(first_object)
+	except json.JSONDecodeError:
+		repaired_object = repair_json_string_escapes(first_object)
+		parsed = json.loads(repaired_object)
+
+	if not isinstance(parsed, dict):
+		raise ValueError("Model output must be a JSON object.")
+	return parsed
+
+# Parses the model's raw output and returns a normalized record plus a status string.
 def parse_model_response(raw_output: str) -> tuple[dict[str, Any] | None, str]:
 	try:
 		parsed = extract_json_object(raw_output)
-		if not isinstance(parsed, dict):
-			return None, "format_error"
 		if "format_error" in parsed:
-			return parsed, "format_error"
-		return parsed, "ok"
+			return {"format_error": str(parsed["format_error"])} if isinstance(parsed["format_error"], str) else parsed, "format_error"
+		validated = validate_parsed_response(parsed)
+		return validated, "ok"
 	except Exception:
 		return None, "format_error"
 
@@ -186,14 +290,10 @@ def run_pair(
 	assumptions_used: list[str] = []
 
 	if parsed is not None:
-		equivalent = normalize_equivalent_value(parsed)
-		confidence_value = parsed.get("confidence")
-		try:
-			confidence = float(confidence_value) if confidence_value is not None else None
-		except (TypeError, ValueError):
-			confidence = None
-		rationale = str(parsed.get("rationale", ""))
-		assumptions_used = normalize_assumptions(parsed.get("assumptions_used", []))
+		equivalent = parsed["equivalent"]
+		confidence = parsed["confidence"]
+		rationale = parsed["rationale"]
+		assumptions_used = parsed["assumptions_used"]
 
 	result = dict(item)
 	result.update(
@@ -208,6 +308,7 @@ def run_pair(
 			"rationale": rationale,
 			"assumptions_used": assumptions_used,
 			"parse_status": parse_status,
+			"parsed_model_output": parsed,
 			"raw_model_output": raw_output,
 			"latency_ms": latency_ms,
 			"model_name": model_name,
