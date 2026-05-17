@@ -102,6 +102,7 @@ class BenchmarkConfig:
     lean_signature_to_informal_query_prompt: str | None
     query_prompt_name: str | None
     query_prompt: str | None
+    resolved_query_encoding_settings: dict[str, dict[str, str]]
     save_rankings: bool
     save_manifests: bool
     save_embeddings: bool
@@ -547,6 +548,7 @@ def benchmark_config_from_args(args) -> BenchmarkConfig:
         lean_signature_to_informal_query_prompt=args.lean_signature_to_informal_query_prompt,
         query_prompt_name=args.query_prompt_name,
         query_prompt=args.query_prompt,
+        resolved_query_encoding_settings=build_resolved_query_encoding_settings(args),
         save_rankings=args.save_rankings,
         save_manifests=args.save_manifests,
         save_embeddings=args.save_embeddings,
@@ -700,6 +702,13 @@ def get_query_encode_kwargs(args, direction: str) -> dict[str, str]:
             encode_kwargs["prompt"] = args.query_prompt
 
     return encode_kwargs
+
+
+def build_resolved_query_encoding_settings(args) -> dict[str, dict[str, str]]:
+    settings: dict[str, dict[str, str]] = {}
+    for direction in args.directions:
+        settings[direction] = get_query_encode_kwargs(args, direction)
+    return settings
 
 
 def _hash_text(value: str) -> str:
@@ -860,6 +869,7 @@ def build_results_payload(
         "design_decisions": {
             "retrieval_task": "exact aligned-pair retrieval",
             "directions": list(args.directions),
+            "resolved_query_encoding_settings": build_resolved_query_encoding_settings(args),
             "query_space": f"Queries come from the `{args.query_split}` split only.",
             "retrieval_corpus_space": "Retrieval corpus is built from these splits: " + ", ".join(args.corpus_splits),
             "normalization": (
@@ -960,6 +970,10 @@ def run_benchmark(args, logger: logging.Logger, run_dir: Path) -> dict[str, Any]
         "Encoding %s query rows against a retrieval corpus of %s rows.",
         len(query_rows),
         len(corpus_rows),
+    )
+    logger.info(
+        "Resolved query encoding settings: %s",
+        json.dumps(build_resolved_query_encoding_settings(args), ensure_ascii=True),
     )
     encode_start = time.perf_counter()
     encoder_instance = Encoder(

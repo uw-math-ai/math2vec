@@ -41,6 +41,11 @@ It can evaluate:
 2. Lean -> informal
 3. both directions in one run
 
+Running both directions in one run is valid for instruction-aware embedding
+models because the benchmark resolves query prompts separately by direction and
+re-encodes the query side for each direction. The query embeddings used for
+`informal -> Lean` are not reused for `Lean -> informal`.
+
 The current default is:
 
 - `informal_to_lean` only
@@ -387,6 +392,9 @@ instead of only failing silently.
 
 The normalized benchmark configuration used for the run.
 
+This now also records the resolved query-encoding settings per direction, so you
+can confirm exactly which prompt or `prompt_name` was used for each query side.
+
 ### `invocation.json`
 
 The command-line invocation and run directory metadata.
@@ -398,6 +406,9 @@ Human-readable run progress and stack traces if the run fails.
 For larger runs, this log now also includes periodic encoding progress updates
 for the longest stages, so you can see approximate percent-complete milestones
 without changing the benchmark behavior.
+
+It also logs the resolved query-encoding settings per direction near the start
+of the run.
 
 ### `results.json`
 

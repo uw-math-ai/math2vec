@@ -11,7 +11,7 @@ set -euo pipefail
 module load conda
 conda activate /gpfs/projects/mathai/math2vec/envs/math2vec
 
-REPO_DIR="${REPO_DIR:-/gpfs/projects/mathai/math2vec/math2vec}"
+REPO_DIR="${REPO_DIR:-/gpfs/projects/mathai/math2vec}"
 cd "${REPO_DIR}"
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
