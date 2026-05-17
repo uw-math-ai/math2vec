@@ -24,6 +24,8 @@ mkdir -p "${HUGGINGFACE_HUB_CACHE}"
 mkdir -p "${TRANSFORMERS_CACHE}"
 mkdir -p "${SENTENCE_TRANSFORMERS_HOME}"
 
+# Full held-out query evaluation is the default.
+# Set MAX_QUERY_ITEMS only for smoke tests or debugging.
 if [[ -n "${MAX_QUERY_ITEMS}" ]]; then
   MAX_QUERY_ITEMS_FLAG="--max-query-items ${MAX_QUERY_ITEMS}"
 else

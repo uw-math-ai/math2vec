@@ -3,6 +3,8 @@ Model classes for generating embeddings.
 Models must implement an encode method and can optionally have metadata.
 """
 
+import os
+
 import numpy as np
 from typing import List, Optional
 
@@ -40,6 +42,7 @@ class SentenceTransformerModel:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = dtype
         model_kwargs = {}
+        sentence_transformer_init_kwargs = {}
         if dtype is not None:
             dtype_map = {
                 "float16": torch.float16,
@@ -52,10 +55,19 @@ class SentenceTransformerModel:
                 raise ValueError(f"Unsupported dtype '{dtype}'. Allowed values: {allowed}")
             model_kwargs["torch_dtype"] = dtype_map[dtype]
 
+        hf_token = (
+            os.environ.get("HF_TOKEN")
+            or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+            or os.environ.get("HUGGINGFACE_HUB_TOKEN")
+        )
+        if hf_token:
+            sentence_transformer_init_kwargs["token"] = hf_token
+
         self.model = SentenceTransformer(
             model_name,
             device=self.device,
             model_kwargs=model_kwargs if model_kwargs else None,
+            **sentence_transformer_init_kwargs,
         )
         if hasattr(self.model, "get_embedding_dimension"):
             self.embedding_dim = self.model.get_embedding_dimension()

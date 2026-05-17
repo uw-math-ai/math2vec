@@ -6,6 +6,9 @@ matrix on Tillicum for the current model list.
 It is intentionally concrete. Every shell command below is meant to be pasted
 directly into a terminal on Tillicum unless explicitly labeled otherwise.
 
+For paper-ready results, use the full held-out `test` query split. That is the
+default workflow in this runbook.
+
 ## What One Job Measures
 
 Each submitted job fixes exactly one Lean-side modality:
@@ -200,15 +203,20 @@ What it does:
 
 ## Choose Full Runs or 100-Query Test Runs
 
-You must choose one of the following two shell commands.
+For paper-ready runs, use the default full-run setting below.
 
-If you want full held-out benchmark runs:
+Command:
 
 ```bash
 unset MAX_QUERY_ITEMS
 ```
 
-If you want 100-query test runs comparable to the earlier Harrier pilot:
+What it does:
+
+- ensures the benchmark uses the full `test` query split as queries
+- this is the intended default for final results
+
+Only if you intentionally want a small debug run should you instead use:
 
 ```bash
 export MAX_QUERY_ITEMS=100
@@ -219,6 +227,38 @@ Meaning:
 - if `MAX_QUERY_ITEMS` is unset, each run uses the full `test` query split
 - if `MAX_QUERY_ITEMS=100`, each run uses only the first 100 test queries
 - in both cases, the retrieval corpus still defaults to `train,val,test`
+
+The `100`-query option is for debugging only and is not appropriate for final
+paper results.
+
+## Optional Hugging Face Authentication
+
+Authenticated model downloads are recommended for larger models so Tillicum does
+not fall back to anonymous Hugging Face access.
+
+The Slurm benchmark wrapper now supports either:
+
+- `HF_TOKEN` already exported in your shell
+- `HF_TOKEN_FILE` pointing to a file containing only the token text
+
+Recommended command:
+
+```bash
+export HF_TOKEN_FILE=$HOME/hf_token.txt
+```
+
+What it does:
+
+- tells the Slurm job wrapper where to read your Hugging Face token
+- the wrapper exports `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, and
+  `HUGGINGFACE_HUB_TOKEN` inside the job before model loading
+
+If you have not created that file yet, create it once on Tillicum with this
+shell command, replacing `<PASTE_YOUR_TOKEN_HERE>` with your real token:
+
+```bash
+printf '%s' '<PASTE_YOUR_TOKEN_HERE>' > $HOME/hf_token.txt
+```
 
 ## Submit the Whole Model Matrix
 

@@ -16,6 +16,16 @@ cd "${REPO_DIR}"
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
+if [[ -n "${HF_TOKEN_FILE:-}" && -f "${HF_TOKEN_FILE}" ]]; then
+  HF_TOKEN="$(tr -d '\r\n' < "${HF_TOKEN_FILE}")"
+  export HF_TOKEN
+fi
+
+if [[ -n "${HF_TOKEN:-}" ]]; then
+  export HUGGING_FACE_HUB_TOKEN="${HF_TOKEN}"
+  export HUGGINGFACE_HUB_TOKEN="${HF_TOKEN}"
+fi
+
 # Override these at submission time if needed, for example:
 # sbatch --export=ALL,MODEL_NAME=microsoft/harrier-oss-v1-0.6b,LEAN_FIELD=signature,BATCH_SIZE=8,RESULTS_DIR=/gpfs/projects/mathai/math2vec/runs/$USER/frenzymath slurmscripts/run_frenzymath_benchmark.slurm
 MODEL_NAME="${MODEL_NAME:-microsoft/harrier-oss-v1-0.6b}"

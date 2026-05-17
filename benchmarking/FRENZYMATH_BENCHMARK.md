@@ -328,6 +328,8 @@ python benchmarking/src/frenzymath_benchmark.py --device cuda
 
 These are mainly for smoke tests and debugging, not final reporting.
 
+For benchmark results intended for a paper, leave both unset.
+
 Example:
 
 ```bash
