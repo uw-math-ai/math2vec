@@ -349,6 +349,8 @@ These usually do not need to be changed unless you know why you want them.
 - `--save-manifests` / `--no-save-manifests`
 - `--save-embeddings`
 - `--save-embeddings-dtype`
+- `--run-label`
+- `--reuse-run-dir`
 - `--results-dir`
 - `--no-normalize`
 

@@ -35,6 +35,8 @@ CORPUS_SPLITS="${CORPUS_SPLITS:-train,val,test}"
 DIRECTIONS="${DIRECTIONS:-informal_to_lean}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
 RESULTS_DIR="${RESULTS_DIR:-/gpfs/projects/mathai/math2vec/runs/$USER/frenzymath}"
+RUN_LABEL="${RUN_LABEL:-}"
+REUSE_RUN_DIR="${REUSE_RUN_DIR:-}"
 DTYPE_FLAG="${DTYPE_FLAG:-}"
 MAX_QUERY_ITEMS_FLAG="${MAX_QUERY_ITEMS_FLAG:-}"
 MAX_CORPUS_ITEMS_FLAG="${MAX_CORPUS_ITEMS_FLAG:-}"
@@ -45,18 +47,32 @@ SAVE_RANKINGS_FLAG="${SAVE_RANKINGS_FLAG:-}"
 SAVE_EMBEDDINGS_FLAG="${SAVE_EMBEDDINGS_FLAG:-}"
 NO_SAVE_MANIFESTS_FLAG="${NO_SAVE_MANIFESTS_FLAG:-}"
 
+if [[ -n "${RUN_LABEL}" ]]; then
+  RUN_LABEL_FLAG="--run-label ${RUN_LABEL}"
+else
+  RUN_LABEL_FLAG=""
+fi
+
+if [[ -n "${REUSE_RUN_DIR}" ]]; then
+  REUSE_RUN_DIR_FLAG="--reuse-run-dir ${REUSE_RUN_DIR}"
+else
+  REUSE_RUN_DIR_FLAG=""
+fi
+
 mkdir -p "${RESULTS_DIR}"
 
 echo "Job started at: $(date -u)"
 echo "Hostname: $(hostname)"
 echo "Repo dir: ${REPO_DIR}"
 echo "Results dir: ${RESULTS_DIR}"
+echo "Run label: ${RUN_LABEL:-none}"
 echo "Model: ${MODEL_NAME}"
 echo "Directions: ${DIRECTIONS}"
 echo "Lean field: ${LEAN_FIELD}"
 echo "Query split: ${QUERY_SPLIT}"
 echo "Corpus splits: ${CORPUS_SPLITS}"
 echo "Batch size: ${BATCH_SIZE}"
+echo "Reuse run dir: ${REUSE_RUN_DIR:-none}"
 if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi
 fi
@@ -70,6 +86,8 @@ python benchmarking/src/frenzymath_benchmark.py \
   --batch-size "${BATCH_SIZE}" \
   --device cuda \
   --results-dir "${RESULTS_DIR}" \
+  ${RUN_LABEL_FLAG} \
+  ${REUSE_RUN_DIR_FLAG} \
   ${DTYPE_FLAG} \
   ${MAX_QUERY_ITEMS_FLAG} \
   ${MAX_CORPUS_ITEMS_FLAG} \

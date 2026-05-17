@@ -11,19 +11,27 @@ default workflow in this runbook.
 
 ## What One Job Measures
 
-Each submitted job fixes exactly one Lean-side modality:
+Each submitted job should fix exactly one Lean-side modality:
 
 - `type`
 - `signature`
 
-and runs both retrieval directions for that same modality:
+and exactly one retrieval direction:
 
 - `informal_to_lean`
 - `lean_to_informal`
 
-This is correct for instruction-aware models because the benchmark uses
-different query prompts for the two directions and re-encodes the query side
-separately for each direction.
+For paper-ready operational clarity, run one Slurm job per exact task:
+
+- one model
+- one Lean-side field
+- one direction
+
+This keeps the run directory name, job name, and saved embedding artifacts easy
+to interpret later.
+
+The benchmark is still capable of running both directions in one process, but
+the recommended Tillicum workflow in this runbook is one direction per job.
 
 For `lean_field=type`, the default query prompts are:
 
@@ -39,23 +47,33 @@ For `lean_field=signature`, the default query prompts are:
 - `lean_to_informal`:
   `Instruct: Find the most mathematically similar statement as a Lean signature`
 
-Within one job:
+Within one `informal_to_lean` job:
 
 - the corpus informal embeddings are encoded once without a query prompt
 - the corpus Lean embeddings are encoded once without a query prompt
 - the query informal embeddings are encoded once with the direction-specific
   `informal_to_lean` prompt
+
+Within one `lean_to_informal` job:
+
+- the corpus informal embeddings are encoded once without a query prompt
+- the corpus Lean embeddings are encoded once without a query prompt
 - the query Lean embeddings are encoded once with the direction-specific
   `lean_to_informal` prompt
 
-So a `type` job computes:
+So a `type` + `informal_to_lean` job computes:
 
 - natural language query embeddings for `natural -> type`
+- type corpus embeddings
+- natural-language corpus embeddings
+
+and a `type` + `lean_to_informal` job computes:
+
 - type query embeddings for `type -> natural`
 - type corpus embeddings
 - natural-language corpus embeddings
 
-and a `signature` job computes the analogous four artifacts for signature.
+The same pattern applies for `signature`.
 
 ## Fixed Benchmark Configuration
 
@@ -260,148 +278,56 @@ shell command, replacing `<PASTE_YOUR_TOKEN_HERE>` with your real token:
 printf '%s' '<PASTE_YOUR_TOKEN_HERE>' > $HOME/hf_token.txt
 ```
 
-## Submit the Whole Model Matrix
+## Submit One Exact Benchmark Job
 
-This repository includes a submission helper script:
+This repository includes a one-job submission helper:
 
 - file:
-  `/gpfs/projects/mathai/math2vec/slurmscripts/submit_frenzymath_model_matrix.sh`
+  `/gpfs/projects/mathai/math2vec/slurmscripts/submit_frenzymath_single.sh`
 
-It submits:
-
-- one `type` job and one `signature` job per model
-- both directions inside each job
-- skips a submission if an exactly matching successful run already exists in
-  the configured results directory
-
-Command:
+Command template:
 
 ```bash
-bash /gpfs/projects/mathai/math2vec/slurmscripts/submit_frenzymath_model_matrix.sh
+bash /gpfs/projects/mathai/math2vec/slurmscripts/submit_frenzymath_single.sh <model_name> <lean_field> <direction> <batch_size> <time_limit> [run_label] [reuse_run_dir]
 ```
+
+Required positional inputs:
+
+- `<model_name>`: Hugging Face model id
+- `<lean_field>`: `type` or `signature`
+- `<direction>`: `informal_to_lean` or `lean_to_informal`
+- `<batch_size>`: integer batch size
+- `<time_limit>`: Slurm wall time such as `04:00:00`
+
+Optional positional inputs:
+
+- `[run_label]`: defaults to `FULL`
+- `[reuse_run_dir]`: optional compatible prior run directory to reuse saved
+  embeddings from
 
 What it does:
 
-- submits up to 12 Slurm jobs
-- each job requests `1` GPU and `8` CPUs
-- each job writes a Slurm log to:
+- submits exactly one Slurm job
+- requests `1` GPU and `8` CPUs
+- writes the Slurm stdout log to:
   `/gpfs/projects/mathai/math2vec/logs/frenzymath`
-- each job writes benchmark outputs to:
+- writes benchmark outputs to:
   `/gpfs/projects/mathai/math2vec/runs/$USER/frenzymath`
-- jobs are skipped if `config.json` and `results.json` show a matching prior
-  successful run
 
-## Exactly Which Jobs Are Submitted
+Run directory naming:
 
-The helper script submits these exact configurations.
+- the benchmark directory name now includes:
+  - timestamp
+  - run label such as `FULL`
+  - query split
+  - corpus split set
+  - direction
+  - Lean field
+  - model slug
 
-### Harrier 0.6B type
+Example run directory:
 
-- model name: `microsoft/harrier-oss-v1-0.6b`
-- lean field: `type`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `32`
-- dtype flag: `--dtype bfloat16`
-- time limit: `04:00:00`
-
-### Harrier 0.6B signature
-
-- model name: `microsoft/harrier-oss-v1-0.6b`
-- lean field: `signature`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `32`
-- dtype flag: `--dtype bfloat16`
-- time limit: `04:00:00`
-
-### Qwen3-Embedding-4B type
-
-- model name: `Qwen/Qwen3-Embedding-4B`
-- lean field: `type`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `12`
-- dtype flag: `--dtype bfloat16`
-- time limit: `08:00:00`
-
-### Qwen3-Embedding-4B signature
-
-- model name: `Qwen/Qwen3-Embedding-4B`
-- lean field: `signature`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `12`
-- dtype flag: `--dtype bfloat16`
-- time limit: `08:00:00`
-
-### Qwen3-Embedding-8B type
-
-- model name: `Qwen/Qwen3-Embedding-8B`
-- lean field: `type`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `8`
-- dtype flag: `--dtype bfloat16`
-- time limit: `12:00:00`
-
-### Qwen3-Embedding-8B signature
-
-- model name: `Qwen/Qwen3-Embedding-8B`
-- lean field: `signature`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `8`
-- dtype flag: `--dtype bfloat16`
-- time limit: `12:00:00`
-
-### Llama-Embed-Nemotron-8B type
-
-- model name: `nvidia/llama-embed-nemotron-8b`
-- lean field: `type`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `8`
-- dtype flag: `--dtype bfloat16`
-- time limit: `12:00:00`
-
-### Llama-Embed-Nemotron-8B signature
-
-- model name: `nvidia/llama-embed-nemotron-8b`
-- lean field: `signature`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `8`
-- dtype flag: `--dtype bfloat16`
-- time limit: `12:00:00`
-
-### KaLM-Embedding-Gemma3-12B-2511 type
-
-- model name: `tencent/KaLM-Embedding-Gemma3-12B-2511`
-- lean field: `type`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `4`
-- dtype flag: `--dtype bfloat16`
-- time limit: `16:00:00`
-
-### KaLM-Embedding-Gemma3-12B-2511 signature
-
-- model name: `tencent/KaLM-Embedding-Gemma3-12B-2511`
-- lean field: `signature`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `4`
-- dtype flag: `--dtype bfloat16`
-- time limit: `16:00:00`
-
-### Harrier 27B type
-
-- model name: `microsoft/harrier-oss-v1-27b`
-- lean field: `type`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `1`
-- dtype flag: `--dtype bfloat16`
-- time limit: `24:00:00`
-
-### Harrier 27B signature
-
-- model name: `microsoft/harrier-oss-v1-27b`
-- lean field: `signature`
-- directions: `informal_to_lean,lean_to_informal`
-- batch size: `1`
-- dtype flag: `--dtype bfloat16`
-- time limit: `24:00:00`
+- `20260517T120000Z_FULL_test_vs_train-val-test_informal_to_lean_type_microsoft_harrier-oss-v1-0.6b`
 
 ## How to Monitor Jobs
 
@@ -474,12 +400,12 @@ Every successful run creates a new run directory under:
 
 The run directory name format is:
 
-- `<timestamp>_test_vs_train-val-test_<lean_field>_<model_slug>`
+- `<timestamp>_<run_label>_test_vs_train-val-test_<direction>_<lean_field>_<model_slug>`
 
 Examples:
 
-- `20260517T012345Z_test_vs_train-val-test_type_microsoft_harrier-oss-v1-0.6b`
-- `20260517T045500Z_test_vs_train-val-test_signature_Qwen_Qwen3-Embedding-4B`
+- `20260517T012345Z_FULL_test_vs_train-val-test_informal_to_lean_type_microsoft_harrier-oss-v1-0.6b`
+- `20260517T045500Z_FULL_test_vs_train-val-test_lean_to_informal_signature_Qwen_Qwen3-Embedding-4B`
 
 The results root also contains:
 
@@ -490,14 +416,24 @@ These point to the most recently completed run in that results directory.
 
 ## What Saved Embedding Files Mean
 
-If `--save-embeddings` is enabled, a `type` run can save:
+If `--save-embeddings` is enabled, a one-direction job can save:
 
 - `corpus_informal_embeddings.npy`
 - `corpus_lean_embeddings.npy`
 - `query_informal_embeddings.npy`
 - `query_lean_embeddings.npy`
 
-For `lean_field=type`, these correspond to:
+For an `informal_to_lean` job:
+
+- `query_informal_embeddings.npy` is present
+- `query_lean_embeddings.npy` is usually absent
+
+For a `lean_to_informal` job:
+
+- `query_lean_embeddings.npy` is present
+- `query_informal_embeddings.npy` is usually absent
+
+For `lean_field=type`, the saved arrays correspond to:
 
 - corpus natural language embeddings
 - corpus Lean type embeddings
@@ -524,6 +460,30 @@ These are rough one-GPU estimates for the full-query setting.
 
 If `MAX_QUERY_ITEMS=100`, runtime drops only modestly because the full retrieval
 corpus is still encoded.
+
+## Reusing Saved Embeddings
+
+The benchmark now supports:
+
+- `--reuse-run-dir <prior_run_dir>`
+
+This allows a new run to reuse compatible saved arrays from an older run
+directory when:
+
+- the model matches
+- the Lean field matches
+- normalization matches
+- the dataset manifests match for the relevant query or corpus side
+- the saved query-direction prompt settings also match for reused query arrays
+
+This is most useful for rerunning Harrier 0.6B if a prior run already saved:
+
+- `corpus_informal_embeddings.npy`
+- `corpus_lean_embeddings.npy`
+
+If your earlier Harrier run used only `100` queries, the corpus arrays may still
+be reusable for a later full run, but the truncated query arrays usually will
+not be.
 
 ## Embedding Storage Estimates
 

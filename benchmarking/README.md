@@ -9,6 +9,7 @@ The maintained benchmark for informal-language to Lean shared-space retrieval is
 - runner: [`benchmarking/src/frenzymath_benchmark.py`](C:/Users/kedar/OneDrive/Desktop/OneDrive%20All%20Files/Documents/Playground/math2vec/benchmarking/src/frenzymath_benchmark.py)
 - full documentation: [`benchmarking/FRENZYMATH_BENCHMARK.md`](C:/Users/kedar/OneDrive/Desktop/OneDrive%20All%20Files/Documents/Playground/math2vec/benchmarking/FRENZYMATH_BENCHMARK.md)
 - Tillicum operational runbook: [`benchmarking/TILLICUM_FRENZYMATH_RUNBOOK.md`](C:/Users/kedar/OneDrive/Desktop/OneDrive%20All%20Files/Documents/Playground/math2vec/benchmarking/TILLICUM_FRENZYMATH_RUNBOOK.md)
+- one-job Tillicum submit helper: [`slurmscripts/submit_frenzymath_single.sh`](C:/Users/kedar/OneDrive/Desktop/OneDrive%20All%20Files/Documents/Playground/math2vec/slurmscripts/submit_frenzymath_single.sh)
 
 If you are trying to benchmark models on FrenzyMath, use that script and document, not the older blueprints-oriented pipeline below.
 
