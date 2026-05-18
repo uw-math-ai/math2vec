@@ -2,7 +2,7 @@
 
 **math2vec** is a project aimed at training and evaluating a text embedding model that works well on mathematical content across two modalities: natural language (LaTeX) and formal Lean 4 code.
 
-[View the Math2Vec Poster](https://github.com/uw-math-ai/math2vec/blob/main/2026-03_math2vec_poster.pdf)
+<img width="2500" height="2000" alt="2026-05 Math2Vec Poster" src="https://github.com/user-attachments/assets/d5a764b7-81e6-4f3f-8276-d9e7ec754957" />
 
 ## Origins
 
