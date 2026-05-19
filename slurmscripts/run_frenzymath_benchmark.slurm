@@ -26,6 +26,7 @@ REPO_DIR="${REPO_DIR:-/gpfs/projects/mathai/math2vec}"
 cd "${REPO_DIR}"
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
 
 if [[ -n "${HF_TOKEN_FILE:-}" && -f "${HF_TOKEN_FILE}" ]]; then
   HF_TOKEN="$(tr -d '\r\n' < "${HF_TOKEN_FILE}")"
@@ -84,6 +85,7 @@ echo "Query split: ${QUERY_SPLIT}"
 echo "Corpus splits: ${CORPUS_SPLITS}"
 echo "Batch size: ${BATCH_SIZE}"
 echo "Reuse run dir: ${REUSE_RUN_DIR:-none}"
+echo "HF_HUB_DISABLE_XET: ${HF_HUB_DISABLE_XET}"
 if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi
 fi
