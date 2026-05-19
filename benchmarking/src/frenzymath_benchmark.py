@@ -105,6 +105,7 @@ class BenchmarkConfig:
     resolved_query_encoding_settings: dict[str, dict[str, str]]
     run_label: str | None
     reuse_run_dir: str | None
+    auto_reuse_results: bool
     save_rankings: bool
     save_manifests: bool
     save_embeddings: bool
@@ -267,6 +268,22 @@ def parse_args(argv: list[str] | None = None):
             "arrays from."
         ),
     )
+    parser.add_argument(
+        "--auto-reuse-results",
+        dest="auto_reuse_results",
+        action="store_true",
+        help=(
+            "Automatically scan the results directory for a compatible prior run "
+            "and reuse any matching saved embedding arrays."
+        ),
+    )
+    parser.add_argument(
+        "--no-auto-reuse-results",
+        dest="auto_reuse_results",
+        action="store_false",
+        help="Disable automatic scan for reusable embedding artifacts.",
+    )
+    parser.set_defaults(auto_reuse_results=True)
     parser.add_argument(
         "--save-rankings",
         action="store_true",
@@ -574,6 +591,7 @@ def benchmark_config_from_args(args) -> BenchmarkConfig:
         resolved_query_encoding_settings=build_resolved_query_encoding_settings(args),
         run_label=args.run_label,
         reuse_run_dir=args.reuse_run_dir,
+        auto_reuse_results=args.auto_reuse_results,
         save_rankings=args.save_rankings,
         save_manifests=args.save_manifests,
         save_embeddings=args.save_embeddings,
@@ -809,6 +827,17 @@ def save_embedding_artifacts(
     return saved_files
 
 
+def save_single_embedding_artifact(
+    run_dir: Path,
+    dtype_name: str,
+    artifact_name: str,
+    embeddings: np.ndarray,
+) -> dict[str, str]:
+    path = run_dir / f"{artifact_name}.npy"
+    np.save(path, _cast_embeddings_for_save(embeddings, dtype_name))
+    return {f"{artifact_name}_file": str(path)}
+
+
 def _json_load(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -839,14 +868,52 @@ def _compatible_base_reuse_config(current_args, source_config: dict[str, Any]) -
     )
 
 
-def load_reusable_embeddings(args, pairing_metadata: dict[str, Any], logger: logging.Logger):
+def resolve_reuse_run_dir(args, logger: logging.Logger, current_run_dir: Path | None = None) -> Path | None:
+    if args.reuse_run_dir is not None:
+        return Path(args.reuse_run_dir)
+
+    if not args.auto_reuse_results:
+        return None
+
+    results_dir = Path(args.results_dir)
+    if not results_dir.exists():
+        return None
+
+    candidates = []
+    for run_dir in sorted(results_dir.iterdir(), reverse=True):
+        if current_run_dir is not None and run_dir == current_run_dir:
+            continue
+        if not run_dir.is_dir():
+            continue
+        config_path = run_dir / "config.json"
+        if not config_path.exists():
+            continue
+        try:
+            source_config = _json_load(config_path)
+        except Exception:
+            continue
+        if _compatible_base_reuse_config(args, source_config):
+            candidates.append(run_dir)
+
+    if candidates:
+        logger.info("Auto-selected reuse candidate run dir: %s", candidates[0])
+        return candidates[0]
+
+    return None
+
+
+def load_reusable_embeddings(
+    args,
+    pairing_metadata: dict[str, Any],
+    logger: logging.Logger,
+    current_run_dir: Path | None = None,
+):
     reusable_embeddings: dict[str, np.ndarray] = {}
     reused_artifact_paths: dict[str, str] = {}
 
-    if args.reuse_run_dir is None:
+    source_run_dir = resolve_reuse_run_dir(args, logger, current_run_dir=current_run_dir)
+    if source_run_dir is None:
         return reusable_embeddings, reused_artifact_paths
-
-    source_run_dir = Path(args.reuse_run_dir)
     source_config_path = source_run_dir / "config.json"
     source_query_manifest_path = source_run_dir / "query_manifest.jsonl"
     source_corpus_manifest_path = source_run_dir / "corpus_manifest.jsonl"
@@ -917,6 +984,22 @@ def load_reusable_embeddings(args, pairing_metadata: dict[str, Any], logger: log
         logger.info("No compatible saved embedding artifacts were found in reuse run dir.")
 
     return reusable_embeddings, reused_artifact_paths
+
+
+def needs_corpus_informal_embeddings(args) -> bool:
+    return "lean_to_informal" in args.directions
+
+
+def needs_corpus_lean_embeddings(args) -> bool:
+    return "informal_to_lean" in args.directions
+
+
+def needs_query_informal_embeddings(args) -> bool:
+    return "informal_to_lean" in args.directions
+
+
+def needs_query_lean_embeddings(args) -> bool:
+    return "lean_to_informal" in args.directions
 
 
 def compute_retrieval_summary(query_embeddings, corpus_embeddings, query_keys, corpus_keys):
@@ -1100,6 +1183,11 @@ def run_benchmark(args, logger: logging.Logger, run_dir: Path) -> dict[str, Any]
 
     query_rows = pairing_metadata["query_rows"]
     corpus_rows = pairing_metadata["corpus_rows"]
+    artifact_paths: dict[str, str] = {}
+
+    if args.save_manifests:
+        logger.info("Saving query/corpus manifests before encoding.")
+        artifact_paths.update(save_manifests(run_dir, pairing_metadata))
 
     logger.info(
         "Encoding %s query rows against a retrieval corpus of %s rows.",
@@ -1120,32 +1208,62 @@ def run_benchmark(args, logger: logging.Logger, run_dir: Path) -> dict[str, Any]
         args,
         pairing_metadata,
         logger,
+        current_run_dir=run_dir,
     )
-    corpus_informal_texts = [row["informal"] for row in corpus_rows]
-    corpus_lean_texts = [row["lean"] for row in corpus_rows]
+    artifact_paths.update(reused_artifact_paths)
 
-    if "corpus_informal_embeddings" in reusable_embeddings:
-        corpus_informal_embeddings = reusable_embeddings["corpus_informal_embeddings"]
-    else:
-        corpus_informal_embeddings = encoder_instance.encode(
-            corpus_informal_texts,
-            progress_callback=build_progress_callback(
-                logger,
-                "Corpus informal encoding",
-                len(corpus_informal_texts),
-            ),
-        )
-    if "corpus_lean_embeddings" in reusable_embeddings:
-        corpus_lean_embeddings = reusable_embeddings["corpus_lean_embeddings"]
-    else:
-        corpus_lean_embeddings = encoder_instance.encode(
-            corpus_lean_texts,
-            progress_callback=build_progress_callback(
-                logger,
-                "Corpus Lean encoding",
-                len(corpus_lean_texts),
-            ),
-        )
+    corpus_informal_embeddings = None
+    corpus_lean_embeddings = None
+    query_informal_embeddings = None
+    query_lean_embeddings = None
+
+    if needs_corpus_informal_embeddings(args):
+        corpus_informal_texts = [row["informal"] for row in corpus_rows]
+        if "corpus_informal_embeddings" in reusable_embeddings:
+            corpus_informal_embeddings = reusable_embeddings["corpus_informal_embeddings"]
+        else:
+            logger.info("Encoding only the corpus informal side required for this run.")
+            corpus_informal_embeddings = encoder_instance.encode(
+                corpus_informal_texts,
+                progress_callback=build_progress_callback(
+                    logger,
+                    "Corpus informal encoding",
+                    len(corpus_informal_texts),
+                ),
+            )
+            if args.save_embeddings:
+                artifact_paths.update(
+                    save_single_embedding_artifact(
+                        run_dir,
+                        args.save_embeddings_dtype,
+                        "corpus_informal_embeddings",
+                        corpus_informal_embeddings,
+                    )
+                )
+
+    if needs_corpus_lean_embeddings(args):
+        corpus_lean_texts = [row["lean"] for row in corpus_rows]
+        if "corpus_lean_embeddings" in reusable_embeddings:
+            corpus_lean_embeddings = reusable_embeddings["corpus_lean_embeddings"]
+        else:
+            logger.info("Encoding only the corpus Lean side required for this run.")
+            corpus_lean_embeddings = encoder_instance.encode(
+                corpus_lean_texts,
+                progress_callback=build_progress_callback(
+                    logger,
+                    "Corpus Lean encoding",
+                    len(corpus_lean_texts),
+                ),
+            )
+            if args.save_embeddings:
+                artifact_paths.update(
+                    save_single_embedding_artifact(
+                        run_dir,
+                        args.save_embeddings_dtype,
+                        "corpus_lean_embeddings",
+                        corpus_lean_embeddings,
+                    )
+                )
     encode_elapsed = time.perf_counter() - encode_start
 
     logger.info("Computing retrieval metrics.")
@@ -1154,9 +1272,6 @@ def run_benchmark(args, logger: logging.Logger, run_dir: Path) -> dict[str, Any]
     corpus_keys = [row["row_key"] for row in corpus_rows]
     metrics_payload = {}
     rankings_payload = {} if args.save_rankings else None
-    artifact_paths: dict[str, str] = dict(reused_artifact_paths)
-    query_informal_embeddings = None
-    query_lean_embeddings = None
 
     if "informal_to_lean" in args.directions:
         logger.info("Evaluating informal_to_lean retrieval.")
@@ -1174,6 +1289,15 @@ def run_benchmark(args, logger: logging.Logger, run_dir: Path) -> dict[str, Any]
                 ),
                 **informal_query_encode_kwargs,
             )
+            if args.save_embeddings:
+                artifact_paths.update(
+                    save_single_embedding_artifact(
+                        run_dir,
+                        args.save_embeddings_dtype,
+                        "query_informal_embeddings",
+                        query_informal_embeddings,
+                    )
+                )
         informal_to_lean, informal_rankings, informal_scores = compute_retrieval_summary(
             query_informal_embeddings,
             corpus_lean_embeddings,
@@ -1205,6 +1329,15 @@ def run_benchmark(args, logger: logging.Logger, run_dir: Path) -> dict[str, Any]
                 ),
                 **lean_query_encode_kwargs,
             )
+            if args.save_embeddings:
+                artifact_paths.update(
+                    save_single_embedding_artifact(
+                        run_dir,
+                        args.save_embeddings_dtype,
+                        "query_lean_embeddings",
+                        query_lean_embeddings,
+                    )
+                )
         lean_to_informal, lean_rankings, lean_scores = compute_retrieval_summary(
             query_lean_embeddings,
             corpus_informal_embeddings,
@@ -1220,28 +1353,6 @@ def run_benchmark(args, logger: logging.Logger, run_dir: Path) -> dict[str, Any]
                 "scores": lean_scores,
             }
     retrieval_elapsed = time.perf_counter() - retrieval_start
-
-    if args.save_manifests:
-        logger.info("Saving query/corpus manifests.")
-        artifact_paths.update(save_manifests(run_dir, pairing_metadata))
-
-    if args.save_embeddings:
-        logger.info("Saving embedding arrays as %s.", args.save_embeddings_dtype)
-        embedding_payload = {
-            "corpus_informal_embeddings": corpus_informal_embeddings,
-            "corpus_lean_embeddings": corpus_lean_embeddings,
-        }
-        if query_informal_embeddings is not None:
-            embedding_payload["query_informal_embeddings"] = query_informal_embeddings
-        if query_lean_embeddings is not None:
-            embedding_payload["query_lean_embeddings"] = query_lean_embeddings
-        artifact_paths.update(
-            save_embedding_artifacts(
-                run_dir,
-                args.save_embeddings_dtype,
-                embedding_payload,
-            )
-        )
 
     total_elapsed = time.perf_counter() - overall_start
     timings = {
