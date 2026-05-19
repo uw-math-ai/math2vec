@@ -8,6 +8,17 @@
 
 set -euo pipefail
 
+# Clear inherited Conda state from the submission shell so the cluster module
+# can be loaded cleanly inside the batch job.
+unset CONDA_PREFIX || true
+unset CONDA_DEFAULT_ENV || true
+unset CONDA_EXE || true
+unset CONDA_PROMPT_MODIFIER || true
+unset CONDA_PYTHON_EXE || true
+unset CONDA_SHLVL || true
+unset _CE_CONDA || true
+unset _CE_M || true
+
 module load conda
 conda activate /gpfs/projects/mathai/math2vec/envs/math2vec
 
