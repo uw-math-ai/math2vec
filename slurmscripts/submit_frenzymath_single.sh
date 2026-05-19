@@ -48,6 +48,7 @@ CORPUS_SPLITS="${CORPUS_SPLITS:-train,val,test}"
 SAVE_RANKINGS_FLAG="${SAVE_RANKINGS_FLAG:---save-rankings}"
 SAVE_EMBEDDINGS_FLAG="${SAVE_EMBEDDINGS_FLAG:---save-embeddings --save-embeddings-dtype float16}"
 DTYPE_FLAG="${DTYPE_FLAG:---dtype bfloat16}"
+DIRECTIONS="${DIRECTION}"
 
 mkdir -p "${RESULTS_DIR}"
 mkdir -p "${LOG_DIR}"
@@ -72,6 +73,27 @@ echo "  run_label=${RUN_LABEL}"
 echo "  reuse_run_dir=${REUSE_RUN_DIR:-none}"
 echo "  results_dir=${RESULTS_DIR}"
 
+export REPO_DIR
+export RESULTS_DIR
+export LOG_DIR
+export HF_HOME
+export HUGGINGFACE_HUB_CACHE
+export TRANSFORMERS_CACHE
+export SENTENCE_TRANSFORMERS_HOME
+export HF_TOKEN_FILE
+export QUERY_SPLIT
+export CORPUS_SPLITS
+export SAVE_RANKINGS_FLAG
+export SAVE_EMBEDDINGS_FLAG
+export DTYPE_FLAG
+export MODEL_NAME
+export LEAN_FIELD
+export DIRECTIONS
+export BATCH_SIZE
+export TIME_LIMIT
+export RUN_LABEL
+export REUSE_RUN_DIR
+
 sbatch \
   --job-name="${JOB_NAME}" \
   --qos=normal \
@@ -79,5 +101,5 @@ sbatch \
   --cpus-per-task=8 \
   --time="${TIME_LIMIT}" \
   --output="${LOG_DIR}/%x_%j.out" \
-  --export=ALL,REPO_DIR="${REPO_DIR}",RESULTS_DIR="${RESULTS_DIR}",MODEL_NAME="${MODEL_NAME}",LEAN_FIELD="${LEAN_FIELD}",QUERY_SPLIT="${QUERY_SPLIT}",CORPUS_SPLITS="${CORPUS_SPLITS}",DIRECTIONS="${DIRECTION}",BATCH_SIZE="${BATCH_SIZE}",DTYPE_FLAG="${DTYPE_FLAG}",RUN_LABEL="${RUN_LABEL}",REUSE_RUN_DIR="${REUSE_RUN_DIR}",SAVE_RANKINGS_FLAG="${SAVE_RANKINGS_FLAG}",SAVE_EMBEDDINGS_FLAG="${SAVE_EMBEDDINGS_FLAG}",HF_HOME="${HF_HOME}",HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE}",TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE}",SENTENCE_TRANSFORMERS_HOME="${SENTENCE_TRANSFORMERS_HOME}",HF_TOKEN_FILE="${HF_TOKEN_FILE}" \
+  --export=ALL,DIRECTIONS \
   "${REPO_DIR}/slurmscripts/run_frenzymath_benchmark.slurm"
