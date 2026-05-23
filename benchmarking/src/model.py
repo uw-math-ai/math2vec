@@ -4,6 +4,7 @@ Models must implement an encode method and can optionally have metadata.
 """
 
 import os
+import gc
 
 import numpy as np
 from typing import List, Optional
@@ -43,6 +44,9 @@ class SentenceTransformerModel:
         self.dtype = dtype
         model_kwargs = {}
         sentence_transformer_init_kwargs = {}
+        if self.device == "cuda" and hasattr(torch.backends, "cuda"):
+            if hasattr(torch.backends.cuda, "enable_cudnn_sdp"):
+                torch.backends.cuda.enable_cudnn_sdp(False)
         if dtype is not None:
             dtype_map = {
                 "float16": torch.float16,
@@ -103,10 +107,19 @@ class SentenceTransformerModel:
             numpy.ndarray: Embeddings, shape (len(texts), embedding_dim)
         """
 
-        embeddings = self.model.encode(texts, convert_to_numpy=True, **kwargs)
-                # calls the encode function from sentence-transformers, 
-                # which returns a numpy array of shape (n_texts, embedding_dim)
-        return embeddings
+        try:
+            embeddings = self.model.encode(texts, convert_to_numpy=True, **kwargs)
+            return embeddings
+        except RuntimeError:
+            if self.device == "cuda":
+                gc.collect()
+                try:
+                    import torch
+
+                    torch.cuda.empty_cache()
+                except Exception:
+                    pass
+            raise
 
 
 class random_embedder:

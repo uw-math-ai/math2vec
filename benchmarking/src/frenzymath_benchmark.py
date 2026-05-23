@@ -31,6 +31,7 @@ Important design consequences:
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
 import logging
@@ -1334,6 +1335,14 @@ def encode_rows_with_persistent_cache(
         except RuntimeError as error:
             if not is_recoverable_batch_error(error) or current_batch_size <= 1:
                 raise
+            gc.collect()
+            try:
+                import torch
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
             next_batch_size = max(1, current_batch_size // 2)
             logger.warning(
                 "%s cache hit a recoverable GPU batch failure at rows %s:%s with batch size %s. "
