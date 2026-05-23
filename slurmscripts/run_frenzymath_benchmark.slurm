@@ -41,12 +41,16 @@ fi
 # Override these at submission time if needed, for example:
 # sbatch --export=ALL,MODEL_NAME=microsoft/harrier-oss-v1-0.6b,LEAN_FIELD=signature,BATCH_SIZE=8,RESULTS_DIR=/gpfs/projects/mathai/math2vec/runs/$USER/frenzymath slurmscripts/run_frenzymath_benchmark.slurm
 MODEL_NAME="${MODEL_NAME:-microsoft/harrier-oss-v1-0.6b}"
+TASK_PRESET="${TASK_PRESET:-}"
+QUERY_FIELD_NAME="${QUERY_FIELD_NAME:-}"
+DOC_FIELD_NAME="${DOC_FIELD_NAME:-}"
 LEAN_FIELD="${LEAN_FIELD:-type}"
 QUERY_SPLIT="${QUERY_SPLIT:-test}"
 CORPUS_SPLITS="${CORPUS_SPLITS:-train,val,test}"
 DIRECTIONS="${DIRECTIONS:-informal_to_lean}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
 RESULTS_DIR="${RESULTS_DIR:-/gpfs/projects/mathai/math2vec/runs/$USER/frenzymath}"
+EMBEDDING_CACHE_DIR="${EMBEDDING_CACHE_DIR:-${RESULTS_DIR}/_embedding_cache}"
 RUN_LABEL="${RUN_LABEL:-}"
 REUSE_RUN_DIR="${REUSE_RUN_DIR:-}"
 DTYPE_FLAG="${DTYPE_FLAG:-}"
@@ -58,6 +62,7 @@ LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG="${LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG:-}"
 SAVE_RANKINGS_FLAG="${SAVE_RANKINGS_FLAG:-}"
 SAVE_EMBEDDINGS_FLAG="${SAVE_EMBEDDINGS_FLAG:-}"
 NO_SAVE_MANIFESTS_FLAG="${NO_SAVE_MANIFESTS_FLAG:-}"
+DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG="${DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG:-}"
 
 if [[ -n "${RUN_LABEL}" ]]; then
   RUN_LABEL_FLAG="--run-label ${RUN_LABEL}"
@@ -79,34 +84,81 @@ echo "Repo dir: ${REPO_DIR}"
 echo "Results dir: ${RESULTS_DIR}"
 echo "Run label: ${RUN_LABEL:-none}"
 echo "Model: ${MODEL_NAME}"
+echo "Task preset: ${TASK_PRESET:-none}"
+echo "Query field name: ${QUERY_FIELD_NAME:-none}"
+echo "Document field name: ${DOC_FIELD_NAME:-none}"
 echo "Directions: ${DIRECTIONS}"
 echo "Lean field: ${LEAN_FIELD}"
 echo "Query split: ${QUERY_SPLIT}"
 echo "Corpus splits: ${CORPUS_SPLITS}"
 echo "Batch size: ${BATCH_SIZE}"
 echo "Reuse run dir: ${REUSE_RUN_DIR:-none}"
+echo "Embedding cache dir: ${EMBEDDING_CACHE_DIR}"
 echo "HF_HUB_DISABLE_XET: ${HF_HUB_DISABLE_XET}"
 if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi
 fi
 
-python benchmarking/src/frenzymath_benchmark.py \
-  --model-name "${MODEL_NAME}" \
-  --directions "${DIRECTIONS}" \
-  --lean-field "${LEAN_FIELD}" \
-  --query-split "${QUERY_SPLIT}" \
-  --corpus-splits "${CORPUS_SPLITS}" \
-  --batch-size "${BATCH_SIZE}" \
-  --device cuda \
-  --results-dir "${RESULTS_DIR}" \
-  ${RUN_LABEL_FLAG} \
-  ${REUSE_RUN_DIR_FLAG} \
-  ${DTYPE_FLAG} \
-  ${MAX_QUERY_ITEMS_FLAG} \
-  ${MAX_CORPUS_ITEMS_FLAG} \
-  ${QUERY_PROMPT_NAME_FLAG} \
-  ${INFORMAL_TO_LEAN_QUERY_PROMPT_FLAG} \
-  ${LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG} \
-  ${SAVE_RANKINGS_FLAG} \
-  ${SAVE_EMBEDDINGS_FLAG} \
-  ${NO_SAVE_MANIFESTS_FLAG}
+if [[ -n "${TASK_PRESET}" ]]; then
+  python benchmarking/src/frenzymath_benchmark.py \
+    --model-name "${MODEL_NAME}" \
+    --task-preset "${TASK_PRESET}" \
+    --query-split "${QUERY_SPLIT}" \
+    --corpus-splits "${CORPUS_SPLITS}" \
+    --batch-size "${BATCH_SIZE}" \
+    --device cuda \
+    --results-dir "${RESULTS_DIR}" \
+    --embedding-cache-dir "${EMBEDDING_CACHE_DIR}" \
+    ${RUN_LABEL_FLAG} \
+    ${DTYPE_FLAG} \
+    ${MAX_QUERY_ITEMS_FLAG} \
+    ${MAX_CORPUS_ITEMS_FLAG} \
+    ${QUERY_PROMPT_NAME_FLAG} \
+    ${SAVE_RANKINGS_FLAG} \
+    ${SAVE_EMBEDDINGS_FLAG} \
+    ${DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG} \
+    ${NO_SAVE_MANIFESTS_FLAG}
+elif [[ -n "${QUERY_FIELD_NAME}" && -n "${DOC_FIELD_NAME}" ]]; then
+  python benchmarking/src/frenzymath_benchmark.py \
+    --model-name "${MODEL_NAME}" \
+    --query-field-name "${QUERY_FIELD_NAME}" \
+    --doc-field-name "${DOC_FIELD_NAME}" \
+    --query-split "${QUERY_SPLIT}" \
+    --corpus-splits "${CORPUS_SPLITS}" \
+    --batch-size "${BATCH_SIZE}" \
+    --device cuda \
+    --results-dir "${RESULTS_DIR}" \
+    --embedding-cache-dir "${EMBEDDING_CACHE_DIR}" \
+    ${RUN_LABEL_FLAG} \
+    ${DTYPE_FLAG} \
+    ${MAX_QUERY_ITEMS_FLAG} \
+    ${MAX_CORPUS_ITEMS_FLAG} \
+    ${QUERY_PROMPT_NAME_FLAG} \
+    ${SAVE_RANKINGS_FLAG} \
+    ${SAVE_EMBEDDINGS_FLAG} \
+    ${DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG} \
+    ${NO_SAVE_MANIFESTS_FLAG}
+else
+  python benchmarking/src/frenzymath_benchmark.py \
+    --model-name "${MODEL_NAME}" \
+    --directions "${DIRECTIONS}" \
+    --lean-field "${LEAN_FIELD}" \
+    --query-split "${QUERY_SPLIT}" \
+    --corpus-splits "${CORPUS_SPLITS}" \
+    --batch-size "${BATCH_SIZE}" \
+    --device cuda \
+    --results-dir "${RESULTS_DIR}" \
+    --embedding-cache-dir "${EMBEDDING_CACHE_DIR}" \
+    ${RUN_LABEL_FLAG} \
+    ${REUSE_RUN_DIR_FLAG} \
+    ${DTYPE_FLAG} \
+    ${MAX_QUERY_ITEMS_FLAG} \
+    ${MAX_CORPUS_ITEMS_FLAG} \
+    ${QUERY_PROMPT_NAME_FLAG} \
+    ${INFORMAL_TO_LEAN_QUERY_PROMPT_FLAG} \
+    ${LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG} \
+    ${SAVE_RANKINGS_FLAG} \
+    ${SAVE_EMBEDDINGS_FLAG} \
+    ${DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG} \
+    ${NO_SAVE_MANIFESTS_FLAG}
+fi

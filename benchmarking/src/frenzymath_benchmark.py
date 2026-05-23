@@ -73,6 +73,32 @@ DEFAULT_LEAN_SIGNATURE_TO_INFORMAL_QUERY_PROMPT = (
     "Instruct: Find the most mathematically similar statement as a Lean signature\n"
     "Query: "
 )
+TASK_PRESETS = {
+    "informal_to_type": {
+        "query_field_name": "informal_description",
+        "doc_field_name": "type",
+    },
+    "type_to_informal": {
+        "query_field_name": "type",
+        "doc_field_name": "informal_description",
+    },
+    "informal_to_signature": {
+        "query_field_name": "informal_description",
+        "doc_field_name": "signature",
+    },
+    "signature_to_informal": {
+        "query_field_name": "signature",
+        "doc_field_name": "informal_description",
+    },
+    "type_to_signature": {
+        "query_field_name": "type",
+        "doc_field_name": "signature",
+    },
+    "signature_to_type": {
+        "query_field_name": "signature",
+        "doc_field_name": "type",
+    },
+}
 
 
 @dataclass
@@ -81,6 +107,9 @@ class BenchmarkConfig:
     query_split: str
     corpus_splits: list[str]
     directions: list[str]
+    task_preset: str | None
+    query_field_name: str | None
+    doc_field_name: str | None
     informal_field: str
     lean_field: str
     model_type: str
@@ -103,6 +132,7 @@ class BenchmarkConfig:
     query_prompt_name: str | None
     query_prompt: str | None
     resolved_query_encoding_settings: dict[str, dict[str, str]]
+    disable_default_direction_prompts: bool
     run_label: str | None
     reuse_run_dir: str | None
     auto_reuse_results: bool
@@ -110,6 +140,7 @@ class BenchmarkConfig:
     save_manifests: bool
     save_embeddings: bool
     save_embeddings_dtype: str
+    embedding_cache_dir: str
     results_dir: str
 
 
@@ -147,6 +178,32 @@ def parse_args(argv: list[str] | None = None):
         help=(
             "Comma-separated splits used as the retrieval corpus. "
             "Default: train,val,test."
+        ),
+    )
+    parser.add_argument(
+        "--task-preset",
+        choices=sorted(TASK_PRESETS.keys()),
+        default=None,
+        help=(
+            "Optional single-task preset. When provided, the benchmark runs one "
+            "explicit task with fixed query/document fields such as "
+            "informal_to_type or type_to_signature."
+        ),
+    )
+    parser.add_argument(
+        "--query-field-name",
+        default=None,
+        help=(
+            "Optional explicit dataset column used as the query side for the new "
+            "single-task benchmark path."
+        ),
+    )
+    parser.add_argument(
+        "--doc-field-name",
+        default=None,
+        help=(
+            "Optional explicit dataset column used as the retrieval corpus side "
+            "for the new single-task benchmark path."
         ),
     )
     parser.add_argument(
@@ -384,18 +441,41 @@ def parse_args(argv: list[str] | None = None):
         default=None,
         help="Optional raw prompt string to prepend to query encodes.",
     )
+    parser.add_argument(
+        "--disable-default-direction-prompts",
+        action="store_true",
+        default=False,
+        help=(
+            "Disable the built-in direction-specific prompts. This is useful for "
+            "pure no-prompt benchmarking runs."
+        ),
+    )
+    parser.add_argument(
+        "--embedding-cache-dir",
+        default=None,
+        help=(
+            "Directory for reusable embedding caches and resumable partial "
+            "artifacts. Defaults to <results-dir>/_embedding_cache."
+        ),
+    )
     args = parser.parse_args(argv)
     args.corpus_splits = [split.strip() for split in args.corpus_splits.split(",") if split.strip()]
     args.directions = [direction.strip() for direction in args.directions.split(",") if direction.strip()]
-    if args.informal_to_lean_query_prompt_name is None and args.informal_to_lean_type_query_prompt is None:
-        args.informal_to_lean_type_query_prompt = DEFAULT_INFORMAL_TO_LEAN_TYPE_QUERY_PROMPT
-    if args.informal_to_lean_query_prompt_name is None and args.informal_to_lean_signature_query_prompt is None:
-        args.informal_to_lean_signature_query_prompt = DEFAULT_INFORMAL_TO_LEAN_SIGNATURE_QUERY_PROMPT
-    if args.lean_to_informal_query_prompt_name is None and args.lean_type_to_informal_query_prompt is None:
-        args.lean_type_to_informal_query_prompt = DEFAULT_LEAN_TYPE_TO_INFORMAL_QUERY_PROMPT
-    if args.lean_to_informal_query_prompt_name is None and args.lean_signature_to_informal_query_prompt is None:
-        args.lean_signature_to_informal_query_prompt = DEFAULT_LEAN_SIGNATURE_TO_INFORMAL_QUERY_PROMPT
+    if args.embedding_cache_dir is None:
+        args.embedding_cache_dir = str(Path(args.results_dir) / "_embedding_cache")
+    if not args.disable_default_direction_prompts:
+        if args.informal_to_lean_query_prompt_name is None and args.informal_to_lean_type_query_prompt is None:
+            args.informal_to_lean_type_query_prompt = DEFAULT_INFORMAL_TO_LEAN_TYPE_QUERY_PROMPT
+        if args.informal_to_lean_query_prompt_name is None and args.informal_to_lean_signature_query_prompt is None:
+            args.informal_to_lean_signature_query_prompt = DEFAULT_INFORMAL_TO_LEAN_SIGNATURE_QUERY_PROMPT
+        if args.lean_to_informal_query_prompt_name is None and args.lean_type_to_informal_query_prompt is None:
+            args.lean_type_to_informal_query_prompt = DEFAULT_LEAN_TYPE_TO_INFORMAL_QUERY_PROMPT
+        if args.lean_to_informal_query_prompt_name is None and args.lean_signature_to_informal_query_prompt is None:
+            args.lean_signature_to_informal_query_prompt = DEFAULT_LEAN_SIGNATURE_TO_INFORMAL_QUERY_PROMPT
     validate_args(args)
+    task_spec = resolve_single_task_spec(args)
+    if task_spec is not None:
+        args.directions = [task_spec["task_label"]]
     return args
 
 
@@ -408,15 +488,28 @@ def validate_args(args) -> None:
         raise ValueError("--max-corpus-items must be positive when provided.")
     if not args.corpus_splits:
         raise ValueError("--corpus-splits must contain at least one split.")
+    if args.task_preset is not None and (
+        args.query_field_name is not None or args.doc_field_name is not None
+    ):
+        raise ValueError(
+            "Use either --task-preset or the explicit --query-field-name/--doc-field-name "
+            "pair, not both."
+        )
+    if (args.query_field_name is None) != (args.doc_field_name is None):
+        raise ValueError(
+            "--query-field-name and --doc-field-name must be provided together."
+        )
     allowed_directions = {"informal_to_lean", "lean_to_informal"}
     invalid_directions = [direction for direction in args.directions if direction not in allowed_directions]
     if invalid_directions:
-        raise ValueError(
-            f"Invalid direction(s): {invalid_directions}. "
-            "Allowed values are informal_to_lean and lean_to_informal."
-        )
+        if args.task_preset is None and args.query_field_name is None:
+            raise ValueError(
+                f"Invalid direction(s): {invalid_directions}. "
+                "Allowed values are informal_to_lean and lean_to_informal."
+            )
     if not args.directions:
-        raise ValueError("--directions must contain at least one direction.")
+        if args.task_preset is None and args.query_field_name is None:
+            raise ValueError("--directions must contain at least one direction.")
     if args.query_prompt_name is not None and args.query_prompt is not None:
         raise ValueError("Use only one of --query-prompt-name or --query-prompt.")
     if (
@@ -534,11 +627,16 @@ def build_run_directory(args) -> Path:
     timestamp = _timestamp_utc()
     model_part = _slugify(args.model_name if args.model_type != "random" else "random")
     corpus_part = _slugify("-".join(args.corpus_splits))
-    direction_part = _slugify("-".join(args.directions))
+    if args.task_preset is not None:
+        task_part = _slugify(args.task_preset)
+    elif args.query_field_name is not None and args.doc_field_name is not None:
+        task_part = _slugify(f"{args.query_field_name}_to_{args.doc_field_name}")
+    else:
+        task_part = _slugify("-".join(args.directions) + f"_{args.lean_field}")
     label_part = f"{_slugify(args.run_label)}_" if args.run_label else ""
     run_dir = parent / (
         f"{timestamp}_{label_part}{_slugify(args.query_split)}_vs_{corpus_part}_"
-        f"{direction_part}_{_slugify(args.lean_field)}_{model_part}"
+        f"{task_part}_{model_part}"
     )
     run_dir.mkdir(parents=True, exist_ok=False)
     return run_dir
@@ -567,6 +665,9 @@ def benchmark_config_from_args(args) -> BenchmarkConfig:
         query_split=args.query_split,
         corpus_splits=list(args.corpus_splits),
         directions=list(args.directions),
+        task_preset=args.task_preset,
+        query_field_name=args.query_field_name,
+        doc_field_name=args.doc_field_name,
         informal_field=args.informal_field,
         lean_field=args.lean_field,
         model_type=args.model_type,
@@ -589,6 +690,7 @@ def benchmark_config_from_args(args) -> BenchmarkConfig:
         query_prompt_name=args.query_prompt_name,
         query_prompt=args.query_prompt,
         resolved_query_encoding_settings=build_resolved_query_encoding_settings(args),
+        disable_default_direction_prompts=args.disable_default_direction_prompts,
         run_label=args.run_label,
         reuse_run_dir=args.reuse_run_dir,
         auto_reuse_results=args.auto_reuse_results,
@@ -596,8 +698,28 @@ def benchmark_config_from_args(args) -> BenchmarkConfig:
         save_manifests=args.save_manifests,
         save_embeddings=args.save_embeddings,
         save_embeddings_dtype=args.save_embeddings_dtype,
+        embedding_cache_dir=args.embedding_cache_dir,
         results_dir=args.results_dir,
     )
+
+
+def resolve_single_task_spec(args) -> dict[str, str] | None:
+    if args.task_preset is not None:
+        preset = TASK_PRESETS[args.task_preset]
+        return {
+            "task_label": args.task_preset,
+            "query_field_name": preset["query_field_name"],
+            "doc_field_name": preset["doc_field_name"],
+        }
+
+    if args.query_field_name is not None and args.doc_field_name is not None:
+        return {
+            "task_label": f"{args.query_field_name}_to_{args.doc_field_name}",
+            "query_field_name": args.query_field_name,
+            "doc_field_name": args.doc_field_name,
+        }
+
+    return None
 
 
 def build_model(args):
@@ -748,6 +870,22 @@ def get_query_encode_kwargs(args, direction: str) -> dict[str, str]:
 
 
 def build_resolved_query_encoding_settings(args) -> dict[str, dict[str, str]]:
+    task_spec = resolve_single_task_spec(args)
+    if task_spec is not None:
+        if args.query_prompt_name is not None:
+            return {
+                task_spec["task_label"]: {
+                    "prompt_name": args.query_prompt_name,
+                }
+            }
+        if args.query_prompt is not None:
+            return {
+                task_spec["task_label"]: {
+                    "prompt": args.query_prompt,
+                }
+            }
+        return {task_spec["task_label"]: {}}
+
     settings: dict[str, dict[str, str]] = {}
     for direction in args.directions:
         settings[direction] = get_query_encode_kwargs(args, direction)
@@ -838,6 +976,170 @@ def save_single_embedding_artifact(
     return {f"{artifact_name}_file": str(path)}
 
 
+def dataset_to_text_rows(dataset, split_name: str, text_field_name: str):
+    rows = []
+    for row_index, record in enumerate(dataset):
+        rows.append(
+            {
+                "row_key": f"{split_name}:{row_index}",
+                "text": record.get(text_field_name),
+                "text_field_name": text_field_name,
+                "split": split_name,
+                "row_index_within_split": row_index,
+                "dataset_index": record.get("index"),
+            }
+        )
+    return rows
+
+
+def filter_valid_text_rows(rows):
+    valid_rows = []
+    dropped = 0
+    for row in rows:
+        if row["text"]:
+            valid_rows.append(row)
+        else:
+            dropped += 1
+    return valid_rows, dropped
+
+
+def build_text_manifest_entry(row: dict[str, Any]) -> dict[str, Any]:
+    text = row["text"]
+    return {
+        "row_key": row["row_key"],
+        "split": row["split"],
+        "row_index_within_split": row["row_index_within_split"],
+        "dataset_index": row.get("dataset_index"),
+        "text_field_name": row["text_field_name"],
+        "text_hash": _hash_text(text),
+        "text_num_chars": len(text),
+    }
+
+
+def save_text_row_manifest(path: Path, rows: list[dict[str, Any]]) -> str:
+    _write_jsonl(path, [build_text_manifest_entry(row) for row in rows])
+    return str(path)
+
+
+def save_single_task_manifests(run_dir: Path, pairing_metadata: dict[str, Any]) -> dict[str, str]:
+    query_manifest_path = run_dir / "query_manifest.jsonl"
+    corpus_manifest_path = run_dir / "corpus_manifest.jsonl"
+    query_field_corpus_manifest_path = run_dir / "query_field_corpus_manifest.jsonl"
+    save_text_row_manifest(query_manifest_path, pairing_metadata["query_rows"])
+    save_text_row_manifest(corpus_manifest_path, pairing_metadata["corpus_rows"])
+    save_text_row_manifest(
+        query_field_corpus_manifest_path,
+        pairing_metadata["query_field_corpus_rows"],
+    )
+    return {
+        "query_manifest_file": str(query_manifest_path),
+        "corpus_manifest_file": str(corpus_manifest_path),
+        "query_field_corpus_manifest_file": str(query_field_corpus_manifest_path),
+    }
+
+
+def load_single_task_pairs(args, task_spec: dict[str, str]) -> dict[str, Any]:
+    query_field_name = task_spec["query_field_name"]
+    doc_field_name = task_spec["doc_field_name"]
+    columns = sorted(set([query_field_name, doc_field_name]))
+    loaded_splits = data.load_mathlib_informal_splits(
+        splits=sorted(set([args.query_split, *args.corpus_splits])),
+        dataset_name=args.dataset_name,
+        columns=columns,
+    )
+
+    query_dataset = loaded_splits[args.query_split]
+    query_original_size = len(query_dataset)
+    if args.query_shuffle:
+        query_dataset = query_dataset.shuffle(seed=args.seed)
+    if args.max_query_items is not None:
+        query_dataset = query_dataset.select(range(min(args.max_query_items, len(query_dataset))))
+    query_rows = dataset_to_text_rows(
+        query_dataset,
+        split_name=args.query_split,
+        text_field_name=query_field_name,
+    )
+    query_selected_before_empty_filter = len(query_rows)
+    query_rows, query_dropped = filter_valid_text_rows(query_rows)
+
+    corpus_original_sizes = {split: len(loaded_splits[split]) for split in args.corpus_splits}
+    ordered_corpus_splits = list(args.corpus_splits)
+    if args.query_split in ordered_corpus_splits:
+        ordered_corpus_splits = [args.query_split] + [
+            split for split in ordered_corpus_splits if split != args.query_split
+        ]
+
+    corpus_rows = []
+    for split in ordered_corpus_splits:
+        corpus_rows.extend(
+            dataset_to_text_rows(
+                loaded_splits[split],
+                split_name=split,
+                text_field_name=doc_field_name,
+            )
+        )
+    corpus_selected_before_truncation = len(corpus_rows)
+    if args.corpus_shuffle:
+        rng = np.random.default_rng(args.seed)
+        indices = rng.permutation(len(corpus_rows)).tolist()
+        corpus_rows = [corpus_rows[index] for index in indices]
+    if args.max_corpus_items is not None:
+        corpus_rows = corpus_rows[: min(args.max_corpus_items, len(corpus_rows))]
+    corpus_selected_rows = len(corpus_rows)
+    corpus_rows, corpus_dropped = filter_valid_text_rows(corpus_rows)
+
+    query_field_corpus_rows = []
+    for split in ordered_corpus_splits:
+        query_field_corpus_rows.extend(
+            dataset_to_text_rows(
+                loaded_splits[split],
+                split_name=split,
+                text_field_name=query_field_name,
+            )
+        )
+    query_field_corpus_rows, query_field_corpus_dropped = filter_valid_text_rows(
+        query_field_corpus_rows
+    )
+
+    if not query_rows:
+        raise ValueError(
+            "No valid query rows were loaded for this task. This usually means the "
+            "selected query field is missing or empty."
+        )
+    if not corpus_rows:
+        raise ValueError(
+            "No valid corpus rows were loaded for this task. This usually means the "
+            "selected document field is missing or empty."
+        )
+
+    corpus_keys = {row["row_key"] for row in corpus_rows}
+    matched_query_rows = [row for row in query_rows if row["row_key"] in corpus_keys]
+    unmatched_query_count = len(query_rows) - len(matched_query_rows)
+    if not matched_query_rows:
+        raise ValueError(
+            "None of the query rows have a corresponding row in the retrieval corpus. "
+            "Check --query-split, --corpus-splits, and any query/corpus truncation."
+        )
+
+    return {
+        "task_label": task_spec["task_label"],
+        "query_field_name": query_field_name,
+        "doc_field_name": doc_field_name,
+        "query_rows": matched_query_rows,
+        "corpus_rows": corpus_rows,
+        "query_field_corpus_rows": query_field_corpus_rows,
+        "query_original_size": query_original_size,
+        "query_selected_row_count_before_empty_filter": query_selected_before_empty_filter,
+        "query_dropped_rows_due_to_missing_or_empty_text": query_dropped,
+        "query_dropped_rows_due_to_missing_corpus_match": unmatched_query_count,
+        "corpus_original_sizes_by_split": corpus_original_sizes,
+        "corpus_selected_row_count_before_empty_filter": corpus_selected_rows,
+        "corpus_dropped_rows_due_to_missing_or_empty_text": corpus_dropped,
+        "corpus_selected_row_count_before_truncation": corpus_selected_before_truncation,
+        "query_field_corpus_dropped_rows_due_to_missing_or_empty_text": query_field_corpus_dropped,
+    }
+
+
 def _json_load(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -855,6 +1157,232 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def _load_embedding_file(path: Path) -> np.ndarray:
     return np.asarray(np.load(path), dtype=np.float32)
+
+
+def _stable_json_string(payload: Any) -> str:
+    return json.dumps(payload, sort_keys=True, ensure_ascii=True)
+
+
+def _hash_json_payload(payload: Any) -> str:
+    return hashlib.sha256(_stable_json_string(payload).encode("utf-8")).hexdigest()
+
+
+def _normalize_embeddings_array(embeddings: np.ndarray) -> np.ndarray:
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    norms = np.where(norms == 0, 1, norms)
+    return embeddings / norms
+
+
+def build_cache_rows_manifest(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [build_text_manifest_entry(row) for row in rows]
+
+
+def build_embedding_cache_spec(
+    args,
+    artifact_kind: str,
+    text_field_name: str,
+    rows: list[dict[str, Any]],
+    encode_kwargs: dict[str, str],
+) -> dict[str, Any]:
+    row_manifest = build_cache_rows_manifest(rows)
+    return {
+        "cache_schema_version": 1,
+        "artifact_kind": artifact_kind,
+        "dataset_name": args.dataset_name,
+        "text_field_name": text_field_name,
+        "model_type": args.model_type,
+        "model_name": args.model_name,
+        "normalize": args.normalize,
+        "query_encoding_settings": dict(encode_kwargs),
+        "row_manifest_hash": _hash_json_payload(row_manifest),
+        "row_count": len(row_manifest),
+    }
+
+
+def cache_dir_from_spec(cache_root: Path, cache_spec: dict[str, Any]) -> Path:
+    cache_key = _hash_json_payload(cache_spec)[:24]
+    text_field_slug = _slugify(cache_spec["text_field_name"])
+    artifact_slug = _slugify(cache_spec["artifact_kind"])
+    return cache_root / f"{artifact_slug}_{text_field_slug}_{cache_key}"
+
+
+def save_cache_metadata(path: Path, payload: dict[str, Any]) -> None:
+    _json_dump(path, payload)
+
+
+def encode_rows_with_persistent_cache(
+    args,
+    logger: logging.Logger,
+    model_instance,
+    rows: list[dict[str, Any]],
+    text_field_name: str,
+    artifact_kind: str,
+    encode_kwargs: dict[str, str],
+) -> tuple[np.ndarray, dict[str, str]]:
+    cache_root = Path(args.embedding_cache_dir)
+    cache_root.mkdir(parents=True, exist_ok=True)
+    cache_spec = build_embedding_cache_spec(
+        args,
+        artifact_kind=artifact_kind,
+        text_field_name=text_field_name,
+        rows=rows,
+        encode_kwargs=encode_kwargs,
+    )
+    artifact_dir = cache_dir_from_spec(cache_root, cache_spec)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    cache_metadata_path = artifact_dir / "cache_metadata.json"
+    cache_manifest_path = artifact_dir / "rows_manifest.jsonl"
+    cache_embeddings_path = artifact_dir / "embeddings.npy"
+
+    if not cache_manifest_path.exists():
+        save_text_row_manifest(cache_manifest_path, rows)
+
+    existing_metadata = None
+    if cache_metadata_path.exists():
+        try:
+            existing_metadata = _json_load(cache_metadata_path)
+        except Exception:
+            existing_metadata = None
+
+    if existing_metadata is not None:
+        existing_spec = existing_metadata.get("cache_spec")
+        if existing_spec != cache_spec:
+            raise ValueError(
+                "Cache metadata exists but does not match the current cache specification: "
+                f"{artifact_dir}"
+            )
+        if (
+            existing_metadata.get("status") == "complete"
+            and cache_embeddings_path.exists()
+            and existing_metadata.get("rows_encoded") == len(rows)
+        ):
+            logger.info("Reusing completed embedding cache: %s", cache_embeddings_path)
+            return _load_embedding_file(cache_embeddings_path), {
+                f"{artifact_kind}_cache_dir": str(artifact_dir),
+                f"{artifact_kind}_cache_embeddings_file": str(cache_embeddings_path),
+                f"{artifact_kind}_cache_metadata_file": str(cache_metadata_path),
+                f"{artifact_kind}_cache_manifest_file": str(cache_manifest_path),
+            }
+
+    metadata = {
+        "cache_spec": cache_spec,
+        "status": "in_progress",
+        "rows_encoded": 0,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "cache_dir": str(artifact_dir),
+        "embeddings_file": str(cache_embeddings_path),
+        "rows_manifest_file": str(cache_manifest_path),
+        "storage_dtype": args.save_embeddings_dtype,
+        "batch_size_hint": args.batch_size,
+        "documentation": {
+            "purpose": (
+                "Reusable embedding cache for a single text field, model, prompt "
+                "configuration, and exact row selection."
+            ),
+            "safe_to_reuse_when": (
+                "cache_spec matches exactly, including dataset, model, field name, "
+                "normalization, query prompt settings, and row_manifest_hash."
+            ),
+        },
+    }
+    if existing_metadata is not None:
+        metadata["rows_encoded"] = int(existing_metadata.get("rows_encoded", 0))
+        metadata["created_at_utc"] = existing_metadata.get(
+            "created_at_utc",
+            metadata["created_at_utc"],
+        )
+    if metadata["rows_encoded"] > 0 and not cache_embeddings_path.exists():
+        logger.warning(
+            "Cache metadata reported partial progress but the embeddings file is missing. Restarting this cache from scratch: %s",
+            artifact_dir,
+        )
+        metadata["rows_encoded"] = 0
+    save_cache_metadata(cache_metadata_path, metadata)
+
+    memmap = None
+    start_index = int(metadata["rows_encoded"])
+    if cache_embeddings_path.exists() and start_index > 0:
+        memmap = np.load(cache_embeddings_path, mmap_mode="r+")
+
+    total_rows = len(rows)
+    total_batches = (total_rows + args.batch_size - 1) // args.batch_size if total_rows else 0
+    report_interval_batches = max(1, total_batches // 20) if total_batches else 1
+
+    for batch_start in range(start_index, total_rows, args.batch_size):
+        batch_end = min(batch_start + args.batch_size, total_rows)
+        batch_index = batch_start // args.batch_size + 1
+        batch_texts = [row["text"] for row in rows[batch_start:batch_end]]
+        batch_embeddings = np.asarray(
+            model_instance.encode(batch_texts, **encode_kwargs),
+            dtype=np.float32,
+        )
+        if args.normalize:
+            batch_embeddings = _normalize_embeddings_array(batch_embeddings)
+        if memmap is None:
+            save_dtype = np.float16 if args.save_embeddings_dtype == "float16" else np.float32
+            memmap = np.lib.format.open_memmap(
+                cache_embeddings_path,
+                mode="w+",
+                dtype=save_dtype,
+                shape=(total_rows, batch_embeddings.shape[1]),
+            )
+            metadata["embedding_dim"] = int(batch_embeddings.shape[1])
+        memmap[batch_start:batch_end] = _cast_embeddings_for_save(
+            batch_embeddings,
+            args.save_embeddings_dtype,
+        )
+        memmap.flush()
+        metadata["rows_encoded"] = batch_end
+        metadata["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+        save_cache_metadata(cache_metadata_path, metadata)
+
+        should_report = (
+            batch_index == 1
+            or batch_end == total_rows
+            or batch_index % report_interval_batches == 0
+        )
+        if should_report:
+            logger.info(
+                "%s cache progress: %s/%s texts (%.1f%%), batch %s/%s",
+                artifact_kind,
+                batch_end,
+                total_rows,
+                (batch_end / total_rows * 100.0) if total_rows else 100.0,
+                batch_index,
+                total_batches,
+            )
+
+    metadata["status"] = "complete"
+    metadata["rows_encoded"] = total_rows
+    metadata["completed_at_utc"] = datetime.now(timezone.utc).isoformat()
+    metadata["updated_at_utc"] = metadata["completed_at_utc"]
+    save_cache_metadata(cache_metadata_path, metadata)
+    logger.info("Completed embedding cache: %s", cache_embeddings_path)
+    return _load_embedding_file(cache_embeddings_path), {
+        f"{artifact_kind}_cache_dir": str(artifact_dir),
+        f"{artifact_kind}_cache_embeddings_file": str(cache_embeddings_path),
+        f"{artifact_kind}_cache_metadata_file": str(cache_metadata_path),
+        f"{artifact_kind}_cache_manifest_file": str(cache_manifest_path),
+    }
+
+
+def slice_query_embeddings_from_corpus_cache(
+    query_rows: list[dict[str, Any]],
+    corpus_rows: list[dict[str, Any]],
+    corpus_embeddings: np.ndarray,
+) -> np.ndarray:
+    corpus_index_by_key = {}
+    for index, row in enumerate(corpus_rows):
+        corpus_index_by_key[row["row_key"]] = index
+    query_indices = []
+    for row in query_rows:
+        query_indices.append(corpus_index_by_key[row["row_key"]])
+    return np.asarray(corpus_embeddings[query_indices], dtype=np.float32)
+
+
+def should_slice_query_from_corpus_cache(args, encode_kwargs: dict[str, str]) -> bool:
+    return not encode_kwargs and args.query_split in args.corpus_splits
 
 
 def _compatible_base_reuse_config(current_args, source_config: dict[str, Any]) -> bool:
@@ -1067,6 +1595,30 @@ def build_results_payload(
     timings: dict[str, float],
     artifact_paths: dict[str, str],
 ) -> dict[str, Any]:
+    task_spec = resolve_single_task_spec(args)
+    if task_spec is not None:
+        task_metadata = {
+            "task_label": task_spec["task_label"],
+            "query_field_name": task_spec["query_field_name"],
+            "doc_field_name": task_spec["doc_field_name"],
+        }
+        query_space_text = (
+            f"Queries come from the `{args.query_split}` split only using the "
+            f"`{task_spec['query_field_name']}` field."
+        )
+        corpus_space_text = (
+            "Retrieval corpus is built from these splits using the "
+            f"`{task_spec['doc_field_name']}` field: " + ", ".join(args.corpus_splits)
+        )
+    else:
+        task_metadata = {
+            "task_label": None,
+            "query_field_name": args.informal_field if "informal_to_lean" in args.directions else args.lean_field,
+            "doc_field_name": args.lean_field if "informal_to_lean" in args.directions else args.informal_field,
+        }
+        query_space_text = f"Queries come from the `{args.query_split}` split only."
+        corpus_space_text = "Retrieval corpus is built from these splits: " + ", ".join(args.corpus_splits)
+
     return {
         "benchmark_name": "frenzymath_shared_space_retrieval",
         "run_status": "success",
@@ -1087,9 +1639,10 @@ def build_results_payload(
         "design_decisions": {
             "retrieval_task": "exact aligned-pair retrieval",
             "directions": list(args.directions),
+            "task": task_metadata,
             "resolved_query_encoding_settings": build_resolved_query_encoding_settings(args),
-            "query_space": f"Queries come from the `{args.query_split}` split only.",
-            "retrieval_corpus_space": "Retrieval corpus is built from these splits: " + ", ".join(args.corpus_splits),
+            "query_space": query_space_text,
+            "retrieval_corpus_space": corpus_space_text,
             "normalization": (
                 "Embeddings are L2-normalized before retrieval."
                 if args.normalize
@@ -1137,17 +1690,162 @@ def save_failure_artifacts(run_dir: Path, args, error: Exception) -> None:
     _json_dump(run_dir / "failure.json", payload)
 
 
+def run_single_task_benchmark(args, logger: logging.Logger, run_dir: Path) -> dict[str, Any]:
+    task_spec = resolve_single_task_spec(args)
+    if task_spec is None:
+        raise ValueError("Single-task benchmark path requires a resolved task spec.")
+
+    overall_start = time.perf_counter()
+    logger.info("Loading model.")
+    model_start = time.perf_counter()
+    model_instance = build_model(args)
+    model_elapsed = time.perf_counter() - model_start
+
+    logger.info("Loading single-task dataset pairs for %s.", task_spec["task_label"])
+    dataset_start = time.perf_counter()
+    pairing_metadata = load_single_task_pairs(args, task_spec)
+    dataset_elapsed = time.perf_counter() - dataset_start
+
+    artifact_paths: dict[str, str] = {}
+    if args.save_manifests:
+        logger.info("Saving query/corpus manifests before encoding.")
+        artifact_paths.update(save_single_task_manifests(run_dir, pairing_metadata))
+
+    query_rows = pairing_metadata["query_rows"]
+    corpus_rows = pairing_metadata["corpus_rows"]
+    query_field_corpus_rows = pairing_metadata["query_field_corpus_rows"]
+    query_encode_kwargs = {}
+    if args.query_prompt_name is not None:
+        query_encode_kwargs["prompt_name"] = args.query_prompt_name
+    elif args.query_prompt is not None:
+        query_encode_kwargs["prompt"] = args.query_prompt
+
+    logger.info(
+        "Encoding task %s with %s query rows and %s corpus rows.",
+        task_spec["task_label"],
+        len(query_rows),
+        len(corpus_rows),
+    )
+    logger.info(
+        "Resolved query encoding settings: %s",
+        json.dumps(build_resolved_query_encoding_settings(args), ensure_ascii=True),
+    )
+
+    encode_start = time.perf_counter()
+    doc_embeddings, doc_cache_paths = encode_rows_with_persistent_cache(
+        args,
+        logger,
+        model_instance,
+        rows=corpus_rows,
+        text_field_name=task_spec["doc_field_name"],
+        artifact_kind="corpus_field_embeddings",
+        encode_kwargs={},
+    )
+    artifact_paths.update(doc_cache_paths)
+
+    query_source_paths: dict[str, str] = {}
+    if should_slice_query_from_corpus_cache(args, query_encode_kwargs):
+        logger.info(
+            "No query prompt is active, so query embeddings will be sliced from the reusable corpus-level field cache."
+        )
+        query_corpus_embeddings, query_corpus_cache_paths = encode_rows_with_persistent_cache(
+            args,
+            logger,
+            model_instance,
+            rows=query_field_corpus_rows,
+            text_field_name=task_spec["query_field_name"],
+            artifact_kind="corpus_field_embeddings",
+            encode_kwargs={},
+        )
+        artifact_paths.update(query_corpus_cache_paths)
+        query_embeddings = slice_query_embeddings_from_corpus_cache(
+            query_rows,
+            query_field_corpus_rows,
+            query_corpus_embeddings,
+        )
+        query_source_paths["query_embeddings_source"] = "sliced_from_corpus_field_cache"
+        query_source_paths["query_embeddings_source_cache_file"] = query_corpus_cache_paths[
+            "corpus_field_embeddings_cache_embeddings_file"
+        ]
+    else:
+        query_embeddings, query_cache_paths = encode_rows_with_persistent_cache(
+            args,
+            logger,
+            model_instance,
+            rows=query_rows,
+            text_field_name=task_spec["query_field_name"],
+            artifact_kind="query_field_embeddings",
+            encode_kwargs=query_encode_kwargs,
+        )
+        artifact_paths.update(query_cache_paths)
+        query_source_paths["query_embeddings_source"] = "query_field_cache"
+    artifact_paths.update(query_source_paths)
+    encode_elapsed = time.perf_counter() - encode_start
+
+    logger.info("Computing retrieval metrics.")
+    retrieval_start = time.perf_counter()
+    query_keys = [row["row_key"] for row in query_rows]
+    corpus_keys = [row["row_key"] for row in corpus_rows]
+    summary, rankings, scores = compute_retrieval_summary(
+        query_embeddings,
+        doc_embeddings,
+        query_keys=query_keys,
+        corpus_keys=corpus_keys,
+    )
+    metrics_payload = {
+        task_spec["task_label"]: summary,
+    }
+    rankings_payload = None
+    if args.save_rankings:
+        rankings_payload = {
+            task_spec["task_label"]: {
+                "query_row_keys": list(query_keys),
+                "corpus_row_keys": list(corpus_keys),
+                "rankings": rankings,
+                "scores": scores,
+            }
+        }
+    retrieval_elapsed = time.perf_counter() - retrieval_start
+
+    total_elapsed = time.perf_counter() - overall_start
+    timings = {
+        "model_load": model_elapsed,
+        "dataset_load": dataset_elapsed,
+        "encoding": encode_elapsed,
+        "retrieval": retrieval_elapsed,
+        "total": total_elapsed,
+    }
+    results = build_results_payload(
+        args,
+        model_instance,
+        pairing_metadata=pairing_metadata,
+        metrics_payload=metrics_payload,
+        timings=timings,
+        artifact_paths=artifact_paths,
+    )
+    return {
+        "results": results,
+        "rankings_payload": rankings_payload,
+    }
+
+
 def print_human_summary(results: dict[str, Any]) -> None:
     config = results["config"]
     dataset = results["dataset"]
+    task_metadata = results.get("design_decisions", {}).get("task", {})
     print("FrenzyMath benchmark complete.")
     print(f"Model: {config['model_name']}")
     print(f"Dataset: {config['dataset_name']}")
     print(f"Query split: {config['query_split']}")
     print(f"Retrieval corpus splits: {', '.join(config['corpus_splits'])}")
-    print(f"Directions: {', '.join(config['directions'])}")
-    print(f"Informal field: {config['informal_field']}")
-    print(f"Lean field: {config['lean_field']}")
+    if task_metadata.get("task_label"):
+        print(f"Task: {task_metadata['task_label']}")
+        print(f"Query field: {task_metadata['query_field_name']}")
+        print(f"Document field: {task_metadata['doc_field_name']}")
+    else:
+        print(f"Directions: {', '.join(config['directions'])}")
+        print(f"Informal field: {config['informal_field']}")
+        print(f"Lean field: {config['lean_field']}")
     print(f"Pairs evaluated: {dataset['evaluated_pairs']}")
     print(f"Query rows dropped for empty/missing text: {dataset['query_dropped_rows_due_to_missing_or_empty_text']}")
     print(f"Query rows dropped for missing corpus match: {dataset['query_dropped_rows_due_to_missing_corpus_match']}")
@@ -1170,6 +1868,9 @@ def print_human_summary(results: dict[str, Any]) -> None:
 
 
 def run_benchmark(args, logger: logging.Logger, run_dir: Path) -> dict[str, Any]:
+    if resolve_single_task_spec(args) is not None:
+        return run_single_task_benchmark(args, logger, run_dir)
+
     overall_start = time.perf_counter()
     logger.info("Loading model.")
     model_start = time.perf_counter()
