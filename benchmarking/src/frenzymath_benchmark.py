@@ -1173,6 +1173,16 @@ def _normalize_embeddings_array(embeddings: np.ndarray) -> np.ndarray:
     return embeddings / norms
 
 
+def is_recoverable_batch_error(error: Exception) -> bool:
+    message = str(error).lower()
+    return (
+        "out of memory" in message
+        or "no valid execution plans built" in message
+        or "cudnn frontend error" in message
+        or "cuda error" in message
+    )
+
+
 def build_cache_rows_manifest(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [build_text_manifest_entry(row) for row in rows]
 
@@ -1275,6 +1285,7 @@ def encode_rows_with_persistent_cache(
         "rows_manifest_file": str(cache_manifest_path),
         "storage_dtype": args.save_embeddings_dtype,
         "batch_size_hint": args.batch_size,
+        "last_successful_batch_size": None,
         "documentation": {
             "purpose": (
                 "Reusable embedding cache for a single text field, model, prompt "
@@ -1306,17 +1317,40 @@ def encode_rows_with_persistent_cache(
         memmap = np.load(cache_embeddings_path, mmap_mode="r+")
 
     total_rows = len(rows)
-    total_batches = (total_rows + args.batch_size - 1) // args.batch_size if total_rows else 0
-    report_interval_batches = max(1, total_batches // 20) if total_batches else 1
+    current_batch_size = args.batch_size
+    batch_counter = 0
+    next_report_fraction = 0.05
 
-    for batch_start in range(start_index, total_rows, args.batch_size):
-        batch_end = min(batch_start + args.batch_size, total_rows)
-        batch_index = batch_start // args.batch_size + 1
+    batch_start = start_index
+    while batch_start < total_rows:
+        batch_counter += 1
+        batch_end = min(batch_start + current_batch_size, total_rows)
         batch_texts = [row["text"] for row in rows[batch_start:batch_end]]
-        batch_embeddings = np.asarray(
-            model_instance.encode(batch_texts, **encode_kwargs),
-            dtype=np.float32,
-        )
+        try:
+            batch_embeddings = np.asarray(
+                model_instance.encode(batch_texts, **encode_kwargs),
+                dtype=np.float32,
+            )
+        except RuntimeError as error:
+            if not is_recoverable_batch_error(error) or current_batch_size <= 1:
+                raise
+            next_batch_size = max(1, current_batch_size // 2)
+            logger.warning(
+                "%s cache hit a recoverable GPU batch failure at rows %s:%s with batch size %s. "
+                "Error was: %s. Retrying with batch size %s.",
+                artifact_kind,
+                batch_start,
+                batch_end,
+                current_batch_size,
+                error,
+                next_batch_size,
+            )
+            current_batch_size = next_batch_size
+            metadata["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+            metadata["last_recoverable_batch_error"] = str(error)
+            metadata["current_retry_batch_size"] = current_batch_size
+            save_cache_metadata(cache_metadata_path, metadata)
+            continue
         if args.normalize:
             batch_embeddings = _normalize_embeddings_array(batch_embeddings)
         if memmap is None:
@@ -1334,24 +1368,28 @@ def encode_rows_with_persistent_cache(
         )
         memmap.flush()
         metadata["rows_encoded"] = batch_end
+        metadata["last_successful_batch_size"] = len(batch_texts)
         metadata["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
         save_cache_metadata(cache_metadata_path, metadata)
 
+        completed_fraction = batch_end / total_rows if total_rows else 1.0
         should_report = (
-            batch_index == 1
+            batch_counter == 1
             or batch_end == total_rows
-            or batch_index % report_interval_batches == 0
+            or completed_fraction >= next_report_fraction
         )
         if should_report:
             logger.info(
-                "%s cache progress: %s/%s texts (%.1f%%), batch %s/%s",
+                "%s cache progress: %s/%s texts (%.1f%%), current batch size %s",
                 artifact_kind,
                 batch_end,
                 total_rows,
                 (batch_end / total_rows * 100.0) if total_rows else 100.0,
-                batch_index,
-                total_batches,
+                len(batch_texts),
             )
+            while completed_fraction >= next_report_fraction:
+                next_report_fraction += 0.05
+        batch_start = batch_end
 
     metadata["status"] = "complete"
     metadata["rows_encoded"] = total_rows
