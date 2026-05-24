@@ -57,7 +57,7 @@ DTYPE_FLAG="${DTYPE_FLAG:-}"
 MAX_QUERY_ITEMS_FLAG="${MAX_QUERY_ITEMS_FLAG:-}"
 MAX_CORPUS_ITEMS_FLAG="${MAX_CORPUS_ITEMS_FLAG:-}"
 QUERY_PROMPT_NAME_FLAG="${QUERY_PROMPT_NAME_FLAG:-}"
-QUERY_PROMPT_FLAG="${QUERY_PROMPT_FLAG:-}"
+QUERY_PROMPT_TEXT="${QUERY_PROMPT_TEXT:-}"
 INFORMAL_TO_LEAN_QUERY_PROMPT_FLAG="${INFORMAL_TO_LEAN_QUERY_PROMPT_FLAG:-}"
 LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG="${LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG:-}"
 SAVE_RANKINGS_FLAG="${SAVE_RANKINGS_FLAG:-}"
@@ -100,69 +100,86 @@ if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi
 fi
 
+cmd=(
+  python
+  benchmarking/src/frenzymath_benchmark.py
+  --model-name "${MODEL_NAME}"
+  --query-split "${QUERY_SPLIT}"
+  --corpus-splits "${CORPUS_SPLITS}"
+  --batch-size "${BATCH_SIZE}"
+  --device cuda
+  --results-dir "${RESULTS_DIR}"
+  --embedding-cache-dir "${EMBEDDING_CACHE_DIR}"
+)
+
 if [[ -n "${TASK_PRESET}" ]]; then
-  python benchmarking/src/frenzymath_benchmark.py \
-    --model-name "${MODEL_NAME}" \
-    --task-preset "${TASK_PRESET}" \
-    --query-split "${QUERY_SPLIT}" \
-    --corpus-splits "${CORPUS_SPLITS}" \
-    --batch-size "${BATCH_SIZE}" \
-    --device cuda \
-    --results-dir "${RESULTS_DIR}" \
-    --embedding-cache-dir "${EMBEDDING_CACHE_DIR}" \
-    ${RUN_LABEL_FLAG} \
-    ${DTYPE_FLAG} \
-    ${MAX_QUERY_ITEMS_FLAG} \
-    ${MAX_CORPUS_ITEMS_FLAG} \
-    ${QUERY_PROMPT_NAME_FLAG} \
-    ${QUERY_PROMPT_FLAG} \
-    ${SAVE_RANKINGS_FLAG} \
-    ${SAVE_EMBEDDINGS_FLAG} \
-    ${DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG} \
-    ${NO_SAVE_MANIFESTS_FLAG}
+  cmd+=(--task-preset "${TASK_PRESET}")
 elif [[ -n "${QUERY_FIELD_NAME}" && -n "${DOC_FIELD_NAME}" ]]; then
-  python benchmarking/src/frenzymath_benchmark.py \
-    --model-name "${MODEL_NAME}" \
-    --query-field-name "${QUERY_FIELD_NAME}" \
-    --doc-field-name "${DOC_FIELD_NAME}" \
-    --query-split "${QUERY_SPLIT}" \
-    --corpus-splits "${CORPUS_SPLITS}" \
-    --batch-size "${BATCH_SIZE}" \
-    --device cuda \
-    --results-dir "${RESULTS_DIR}" \
-    --embedding-cache-dir "${EMBEDDING_CACHE_DIR}" \
-    ${RUN_LABEL_FLAG} \
-    ${DTYPE_FLAG} \
-    ${MAX_QUERY_ITEMS_FLAG} \
-    ${MAX_CORPUS_ITEMS_FLAG} \
-    ${QUERY_PROMPT_NAME_FLAG} \
-    ${QUERY_PROMPT_FLAG} \
-    ${SAVE_RANKINGS_FLAG} \
-    ${SAVE_EMBEDDINGS_FLAG} \
-    ${DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG} \
-    ${NO_SAVE_MANIFESTS_FLAG}
+  cmd+=(--query-field-name "${QUERY_FIELD_NAME}" --doc-field-name "${DOC_FIELD_NAME}")
 else
-  python benchmarking/src/frenzymath_benchmark.py \
-    --model-name "${MODEL_NAME}" \
-    --directions "${DIRECTIONS}" \
-    --lean-field "${LEAN_FIELD}" \
-    --query-split "${QUERY_SPLIT}" \
-    --corpus-splits "${CORPUS_SPLITS}" \
-    --batch-size "${BATCH_SIZE}" \
-    --device cuda \
-    --results-dir "${RESULTS_DIR}" \
-    --embedding-cache-dir "${EMBEDDING_CACHE_DIR}" \
-    ${RUN_LABEL_FLAG} \
-    ${REUSE_RUN_DIR_FLAG} \
-    ${DTYPE_FLAG} \
-    ${MAX_QUERY_ITEMS_FLAG} \
-    ${MAX_CORPUS_ITEMS_FLAG} \
-    ${QUERY_PROMPT_NAME_FLAG} \
-    ${QUERY_PROMPT_FLAG} \
-    ${INFORMAL_TO_LEAN_QUERY_PROMPT_FLAG} \
-    ${LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG} \
-    ${SAVE_RANKINGS_FLAG} \
-    ${SAVE_EMBEDDINGS_FLAG} \
-    ${DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG} \
-    ${NO_SAVE_MANIFESTS_FLAG}
+  cmd+=(--directions "${DIRECTIONS}" --lean-field "${LEAN_FIELD}")
 fi
+
+if [[ -n "${RUN_LABEL}" ]]; then
+  cmd+=(--run-label "${RUN_LABEL}")
+fi
+if [[ -n "${REUSE_RUN_DIR}" ]]; then
+  cmd+=(--reuse-run-dir "${REUSE_RUN_DIR}")
+fi
+if [[ -n "${DTYPE_FLAG}" ]]; then
+  # shellcheck disable=SC2206
+  extra_parts=( ${DTYPE_FLAG} )
+  cmd+=("${extra_parts[@]}")
+fi
+if [[ -n "${MAX_QUERY_ITEMS_FLAG}" ]]; then
+  # shellcheck disable=SC2206
+  extra_parts=( ${MAX_QUERY_ITEMS_FLAG} )
+  cmd+=("${extra_parts[@]}")
+fi
+if [[ -n "${MAX_CORPUS_ITEMS_FLAG}" ]]; then
+  # shellcheck disable=SC2206
+  extra_parts=( ${MAX_CORPUS_ITEMS_FLAG} )
+  cmd+=("${extra_parts[@]}")
+fi
+if [[ -n "${QUERY_PROMPT_NAME_FLAG}" ]]; then
+  # shellcheck disable=SC2206
+  extra_parts=( ${QUERY_PROMPT_NAME_FLAG} )
+  cmd+=("${extra_parts[@]}")
+fi
+if [[ -n "${QUERY_PROMPT_TEXT}" ]]; then
+  cmd+=(--query-prompt "${QUERY_PROMPT_TEXT}")
+fi
+if [[ -z "${TASK_PRESET}" && -z "${QUERY_FIELD_NAME}" ]]; then
+  if [[ -n "${INFORMAL_TO_LEAN_QUERY_PROMPT_FLAG}" ]]; then
+    # shellcheck disable=SC2206
+    extra_parts=( ${INFORMAL_TO_LEAN_QUERY_PROMPT_FLAG} )
+    cmd+=("${extra_parts[@]}")
+  fi
+  if [[ -n "${LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG}" ]]; then
+    # shellcheck disable=SC2206
+    extra_parts=( ${LEAN_TO_INFORMAL_QUERY_PROMPT_FLAG} )
+    cmd+=("${extra_parts[@]}")
+  fi
+fi
+if [[ -n "${SAVE_RANKINGS_FLAG}" ]]; then
+  # shellcheck disable=SC2206
+  extra_parts=( ${SAVE_RANKINGS_FLAG} )
+  cmd+=("${extra_parts[@]}")
+fi
+if [[ -n "${SAVE_EMBEDDINGS_FLAG}" ]]; then
+  # shellcheck disable=SC2206
+  extra_parts=( ${SAVE_EMBEDDINGS_FLAG} )
+  cmd+=("${extra_parts[@]}")
+fi
+if [[ -n "${DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG}" ]]; then
+  # shellcheck disable=SC2206
+  extra_parts=( ${DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG} )
+  cmd+=("${extra_parts[@]}")
+fi
+if [[ -n "${NO_SAVE_MANIFESTS_FLAG}" ]]; then
+  # shellcheck disable=SC2206
+  extra_parts=( ${NO_SAVE_MANIFESTS_FLAG} )
+  cmd+=("${extra_parts[@]}")
+fi
+
+"${cmd[@]}"
