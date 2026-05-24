@@ -22,7 +22,9 @@ unset _CE_M || true
 module load conda
 conda activate /gpfs/projects/mathai/math2vec/envs/math2vec
 
-REPO_DIR="${REPO_DIR:-/gpfs/projects/mathai/math2vec}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_DIR="${REPO_DIR:-${DEFAULT_REPO_DIR}}"
 cd "${REPO_DIR}"
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -49,7 +51,7 @@ QUERY_SPLIT="${QUERY_SPLIT:-test}"
 CORPUS_SPLITS="${CORPUS_SPLITS:-train,val,test}"
 DIRECTIONS="${DIRECTIONS:-informal_to_lean}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
-RESULTS_DIR="${RESULTS_DIR:-/gpfs/projects/mathai/math2vec/runs/$USER/frenzymath}"
+RESULTS_DIR="${RESULTS_DIR:-/gpfs/scrubbed/$USER/math2vec_runs/frenzymath}"
 EMBEDDING_CACHE_DIR="${EMBEDDING_CACHE_DIR:-${RESULTS_DIR}/_embedding_cache}"
 RUN_LABEL="${RUN_LABEL:-}"
 REUSE_RUN_DIR="${REUSE_RUN_DIR:-}"
@@ -78,6 +80,7 @@ else
 fi
 
 mkdir -p "${RESULTS_DIR}"
+mkdir -p "${EMBEDDING_CACHE_DIR}"
 
 echo "Job started at: $(date -u)"
 echo "Hostname: $(hostname)"

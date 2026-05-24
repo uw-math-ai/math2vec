@@ -16,6 +16,8 @@ TASK_PRESET="$2"
 BATCH_SIZE="$3"
 TIME_LIMIT="$4"
 RUN_LABEL="${5:-FULL}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 case "${TASK_PRESET}" in
   informal_to_type|type_to_informal|informal_to_signature|signature_to_informal|type_to_signature|signature_to_type) ;;
@@ -25,20 +27,20 @@ case "${TASK_PRESET}" in
     ;;
 esac
 
-REPO_DIR="${REPO_DIR:-/gpfs/projects/mathai/math2vec}"
-RESULTS_DIR="${RESULTS_DIR:-/gpfs/projects/mathai/math2vec/runs/$USER/frenzymath}"
-LOG_DIR="${LOG_DIR:-/gpfs/projects/mathai/math2vec/logs/frenzymath}"
-HF_HOME="${HF_HOME:-/gpfs/projects/mathai/math2vec/hf_cache}"
-HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-/gpfs/projects/mathai/math2vec/hf_cache/hub}"
-TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-/gpfs/projects/mathai/math2vec/hf_cache/transformers}"
-SENTENCE_TRANSFORMERS_HOME="${SENTENCE_TRANSFORMERS_HOME:-/gpfs/projects/mathai/math2vec/st_cache}"
+REPO_DIR="${REPO_DIR:-${DEFAULT_REPO_DIR}}"
+RESULTS_DIR="${RESULTS_DIR:-/gpfs/scrubbed/$USER/math2vec_runs/frenzymath}"
+LOG_DIR="${LOG_DIR:-/gpfs/scrubbed/$USER/math2vec_logs/frenzymath}"
+HF_HOME="${HF_HOME:-/gpfs/scrubbed/$USER/math2vec_hf_cache}"
+HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-/gpfs/scrubbed/$USER/math2vec_hf_cache/hub}"
+TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-/gpfs/scrubbed/$USER/math2vec_hf_cache/transformers}"
+SENTENCE_TRANSFORMERS_HOME="${SENTENCE_TRANSFORMERS_HOME:-/gpfs/scrubbed/$USER/math2vec_st_cache}"
 HF_TOKEN_FILE="${HF_TOKEN_FILE:-$HOME/hf_token.txt}"
 QUERY_SPLIT="${QUERY_SPLIT:-test}"
 CORPUS_SPLITS="${CORPUS_SPLITS:-train,val,test}"
 SAVE_RANKINGS_FLAG="${SAVE_RANKINGS_FLAG:---save-rankings}"
 SAVE_EMBEDDINGS_FLAG="${SAVE_EMBEDDINGS_FLAG:---save-embeddings --save-embeddings-dtype float16}"
 DTYPE_FLAG="${DTYPE_FLAG:---dtype bfloat16}"
-DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG="${DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG:---disable-default-direction-prompts}"
+DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG="${DISABLE_DEFAULT_DIRECTION_PROMPTS_FLAG:-}"
 QUERY_PROMPT_NAME_FLAG="${QUERY_PROMPT_NAME_FLAG:-}"
 QUERY_PROMPT_TEXT="${QUERY_PROMPT_TEXT:-}"
 EMBEDDING_CACHE_DIR="${EMBEDDING_CACHE_DIR:-${RESULTS_DIR}/_embedding_cache}"

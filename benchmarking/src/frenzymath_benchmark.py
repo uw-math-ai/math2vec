@@ -74,6 +74,14 @@ DEFAULT_LEAN_SIGNATURE_TO_INFORMAL_QUERY_PROMPT = (
     "Instruct: Find the most mathematically similar statement as a Lean signature\n"
     "Query: "
 )
+DEFAULT_TYPE_TO_SIGNATURE_QUERY_PROMPT = (
+    "Instruct: Find the most mathematically similar Lean signature to this Lean type\n"
+    "Query: "
+)
+DEFAULT_SIGNATURE_TO_TYPE_QUERY_PROMPT = (
+    "Instruct: Find the most mathematically similar Lean type to this Lean signature\n"
+    "Query: "
+)
 TASK_PRESETS = {
     "informal_to_type": {
         "query_field_name": "informal_description",
@@ -99,6 +107,14 @@ TASK_PRESETS = {
         "query_field_name": "signature",
         "doc_field_name": "type",
     },
+}
+TASK_PRESET_DEFAULT_PROMPTS = {
+    "informal_to_type": DEFAULT_INFORMAL_TO_LEAN_TYPE_QUERY_PROMPT,
+    "type_to_informal": DEFAULT_LEAN_TYPE_TO_INFORMAL_QUERY_PROMPT,
+    "informal_to_signature": DEFAULT_INFORMAL_TO_LEAN_SIGNATURE_QUERY_PROMPT,
+    "signature_to_informal": DEFAULT_LEAN_SIGNATURE_TO_INFORMAL_QUERY_PROMPT,
+    "type_to_signature": DEFAULT_TYPE_TO_SIGNATURE_QUERY_PROMPT,
+    "signature_to_type": DEFAULT_SIGNATURE_TO_TYPE_QUERY_PROMPT,
 }
 
 
@@ -870,22 +886,34 @@ def get_query_encode_kwargs(args, direction: str) -> dict[str, str]:
     return encode_kwargs
 
 
+def get_single_task_query_encode_kwargs(args, task_label: str) -> dict[str, str]:
+    if args.query_prompt_name is not None:
+        return {
+            "prompt_name": args.query_prompt_name,
+        }
+    if args.query_prompt is not None:
+        return {
+            "prompt": args.query_prompt,
+        }
+    if args.disable_default_direction_prompts:
+        return {}
+    default_prompt = TASK_PRESET_DEFAULT_PROMPTS.get(task_label)
+    if default_prompt is None:
+        return {}
+    return {
+        "prompt": default_prompt,
+    }
+
+
 def build_resolved_query_encoding_settings(args) -> dict[str, dict[str, str]]:
     task_spec = resolve_single_task_spec(args)
     if task_spec is not None:
-        if args.query_prompt_name is not None:
-            return {
-                task_spec["task_label"]: {
-                    "prompt_name": args.query_prompt_name,
-                }
-            }
-        if args.query_prompt is not None:
-            return {
-                task_spec["task_label"]: {
-                    "prompt": args.query_prompt,
-                }
-            }
-        return {task_spec["task_label"]: {}}
+        return {
+            task_spec["task_label"]: get_single_task_query_encode_kwargs(
+                args,
+                task_spec["task_label"],
+            )
+        }
 
     settings: dict[str, dict[str, str]] = {}
     for direction in args.directions:
@@ -1761,11 +1789,10 @@ def run_single_task_benchmark(args, logger: logging.Logger, run_dir: Path) -> di
     query_rows = pairing_metadata["query_rows"]
     corpus_rows = pairing_metadata["corpus_rows"]
     query_field_corpus_rows = pairing_metadata["query_field_corpus_rows"]
-    query_encode_kwargs = {}
-    if args.query_prompt_name is not None:
-        query_encode_kwargs["prompt_name"] = args.query_prompt_name
-    elif args.query_prompt is not None:
-        query_encode_kwargs["prompt"] = args.query_prompt
+    query_encode_kwargs = get_single_task_query_encode_kwargs(
+        args,
+        task_spec["task_label"],
+    )
 
     logger.info(
         "Encoding task %s with %s query rows and %s corpus rows.",
