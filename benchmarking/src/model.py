@@ -12,6 +12,22 @@ from typing import List, Optional
 from meta import ModelMetadata
 
 
+DEFAULT_TRUST_REMOTE_CODE_MODELS = {
+    "nvidia/llama-embed-nemotron-8b",
+}
+
+
+def should_trust_remote_code(model_name: str) -> bool:
+    configured = os.environ.get("TRUST_REMOTE_CODE_MODELS", "")
+    configured_models = set()
+    for item in configured.split(","):
+        item = item.strip()
+        if item:
+            configured_models.add(item)
+    allowed_models = DEFAULT_TRUST_REMOTE_CODE_MODELS | configured_models
+    return model_name in allowed_models
+
+
 class SentenceTransformerModel:
     """
     Wrapper for sentence-transformers models.
@@ -66,6 +82,8 @@ class SentenceTransformerModel:
         )
         if hf_token:
             sentence_transformer_init_kwargs["token"] = hf_token
+        if should_trust_remote_code(model_name):
+            sentence_transformer_init_kwargs["trust_remote_code"] = True
 
         self.model = SentenceTransformer(
             model_name,
