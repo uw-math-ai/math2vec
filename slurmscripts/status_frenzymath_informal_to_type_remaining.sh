@@ -17,6 +17,8 @@ target_task = "informal_to_type"
 target_prompt = "Instruct: Find the most mathematically similar Lean type to this statement\nQuery: "
 targets = [
     "Qwen/Qwen3-Embedding-8B",
+    "/gpfs/projects/mathai/math2vec/mnrl_mv_133k_e2_b16_v3_hn0",
+    "/gpfs/projects/mathai/math2vec/mnrl_mv_133k_e2_b16_v3_octen_hn0",
     "nvidia/llama-embed-nemotron-8b",
     "tencent/KaLM-Embedding-Gemma3-12B-2511",
     "codefuse-ai/F2LLM-v2-14B",
@@ -33,13 +35,22 @@ try:
 except Exception:
     squeue_text = ""
 
+def slug(text: str) -> str:
+    output = []
+    for character in text.lower():
+        if character.isalnum() or character in "._-":
+            output.append(character)
+        else:
+            output.append("_")
+    return "".join(output)
+
 running_by_model = {}
 for line in squeue_text.splitlines():
     if not line.strip():
         continue
     job_name, state, elapsed = line.split("|", 2)
     for model_name in targets:
-        model_slug = model_name.lower().replace("/", "_").replace(":", "_")
+        model_slug = slug(model_name)
         if target_task in job_name and model_slug in job_name:
             running_by_model[model_name] = {
                 "state": state,

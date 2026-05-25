@@ -40,7 +40,9 @@ task_order = [
 models = [
     "Qwen/Qwen3-Embedding-4B",
     "Qwen/Qwen3-Embedding-8B",
+    "/gpfs/projects/mathai/math2vec/mnrl_mv_133k_e2_b16_v3_hn0",
     "Octen/Octen-Embedding-8B",
+    "/gpfs/projects/mathai/math2vec/mnrl_mv_133k_e2_b16_v3_octen_hn0",
     "nvidia/llama-embed-nemotron-8b",
     "tencent/KaLM-Embedding-Gemma3-12B-2511",
     "codefuse-ai/F2LLM-v2-14B",
@@ -48,7 +50,13 @@ models = [
 ]
 
 def slug(model_name: str) -> str:
-    return model_name.lower().replace("/", "_").replace(":", "_")
+    output = []
+    for character in model_name.lower():
+        if character.isalnum() or character in "._-":
+            output.append(character)
+        else:
+            output.append("_")
+    return "".join(output)
 
 try:
     squeue_text = subprocess.run(

@@ -19,6 +19,8 @@ mkdir -p "${RESULTS_DIR}" "${LOG_DIR}" "${HF_HOME}" "${HUGGINGFACE_HUB_CACHE}" "
 
 MODELS=(
   "Qwen/Qwen3-Embedding-8B|1024|06:00:00"
+  "/gpfs/projects/mathai/math2vec/mnrl_mv_133k_e2_b16_v3_hn0|1024|06:00:00"
+  "/gpfs/projects/mathai/math2vec/mnrl_mv_133k_e2_b16_v3_octen_hn0|1024|06:00:00"
   "nvidia/llama-embed-nemotron-8b|1024|06:00:00"
   "tencent/KaLM-Embedding-Gemma3-12B-2511|1024|08:00:00"
   "codefuse-ai/F2LLM-v2-14B|1024|08:00:00"
