@@ -18,24 +18,6 @@ with two loaders:
     both NL — same modality. This prevents the model from learning a
     "detect modality" shortcut. Also re-sampled per __getitem__.
 
-Key fixes vs the previous version:
-  1. Per-epoch view resampling via torch Dataset subclasses (was: one fixed
-     sampling for the whole run, which neutralized the SimCLR-style stochastic
-     regularization).
-  2. LR schedule: use scheduler='warmupconstant' so LR ramps up over
-     warmup_steps then HOLDS CONSTANT (was: default WarmupLinear scheduler
-     computed t_total from min(loader_lengths)*epochs with two unequal loaders,
-     causing LR to hit 0 around epoch 1.5 of 3. Note: steps_per_epoch can't fix
-     this — newer sentence-transformers silently ignores it when epochs > 1.)
-  3. Per-pair-type evaluation suite: in addition to the primary NL->Lean
-     retrieval task, evaluate every (query_field, doc_field) pair that the
-     multi-view training claims to help (NL rephrasing -> Lean, Lean type ->
-     Lean signature, reverse Lean -> NL, etc.) so we can see WHERE the gains
-     concentrate.
-  4. Tokenizer consistency: both baseline and FT loads pass
-     fix_mistral_regex=True so they tokenize identically (was: warning when
-     loading FT checkpoint indicated baseline/FT used different tokenization).
-
 Hard negatives are read directly from the dataset's `hard_negatives.nl` field.
 
 Run:
@@ -155,7 +137,6 @@ def load_st_model(
 # ---------------------------------------------------------------------------
 
 # Named view fields we care about for per-pair-type eval. Order doesn't matter
-# here — it's just the set of canonical keys we'll look up by name later.
 NAMED_VIEW_FIELDS = (
     "nl_informal",
     "nl_informal_2",
@@ -190,7 +171,7 @@ def extract_record(row: dict) -> Optional[ConceptRecord]:
 
     views_by_name: Dict[str, str] = {}
 
-    # ---- NL views (for training: ordered list with nl_informal first) ----
+    # NL views (for training: ordered list with nl_informal first) 
     nl_views: List[str] = []
 
     nl_informal = safe_str(views_dict.get("nl_informal", "")).strip()
@@ -206,14 +187,14 @@ def extract_record(row: dict) -> Optional[ConceptRecord]:
     elif isinstance(rephrasings, str) and rephrasings.strip():
         nl_views.append(rephrasings.strip())
 
-    # Additional named NL views: nl_informal_2, nl_formal, nl_concise
-    for extra_key in ("nl_informal_2", "nl_formal", "nl_concise"):
+    # Additional named NL views: nl_informal_2
+    for extra_key in ("nl_informal_2"):
         extra = safe_str(views_dict.get(extra_key, "")).strip()
         if extra:
             nl_views.append(extra)
             views_by_name[extra_key] = extra
 
-    # ---- Lean views ----
+    # Lean views
     lean_views: List[str] = []
     for key in ("lean_type", "lean_signature"):
         v = safe_str(views_dict.get(key, "")).strip()
@@ -221,7 +202,7 @@ def extract_record(row: dict) -> Optional[ConceptRecord]:
             lean_views.append(v)
             views_by_name[key] = v
 
-    # ---- Hard negatives (NL only) ----
+    # Hard negatives (NL only) 
     nl_hns: List[str] = []
     raw_nl_hns = hn_dict.get("nl") or []
     for hn in raw_nl_hns:
