@@ -1,6 +1,6 @@
-# Math2Vec Benchmark
+# Benchmark
 
-This is the benchmark built for math2vec - a retrieval-focused text embedder evaluation framework.
+This is the benchmark built for a retrieval-focused text embedder evaluation framework.
 
 ## Architecture Overview
 

@@ -1,7 +1,7 @@
 # Multi-View Contrastive Fine-tuning for Mathematical Retrieval
 
 Multi-view contrastive fine-tuning of `Qwen/Qwen3-Embedding-8B` on mathlib4 
-concepts. Code for [paper title].
+concepts. Code for Does My Embedding Reflect That \(A = B\)? Evaluating Mathematical Equivalence in Embedding Models.
 
 ## Quick start
 
@@ -14,11 +14,8 @@ cd fintune
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Download dataset
-huggingface-cli download https://anonymous-hf.up.railway.app/a/xczmsjlqejkf/
-  --repo-type dataset \
-  --local-dir ./data
-
+# Download
+https://anonymous-hf.up.railway.app/a/xczmsjlqejkf/
 ```
 
 The script auto-runs in-domain evaluation at the end of training and writes 
@@ -125,8 +122,8 @@ either of these will change the split.
 
 The final model and ablation variants are available on HuggingFace:
 
-- **Final model**: [Octen](https://huggingface.co/uw-math-ai/Math2Vec-Embedding-8B)
-[Qwen](https://huggingface.co/uw-math-ai/Math2Vec-Embedding-8B)
+- **Final model**: [Qwen]( https://anonymous-hf.up.railway.app/a/pv25ongyl2qb/)
+[Octen]( https://anonymous-hf.up.railway.app/a/9n9cngyu38hk/)
 - Ablations: see paper Appendix for full results
 
 ```python
@@ -137,20 +134,10 @@ model = SentenceTransformer("uw-math-ai/Math2Vec-Embedding-8B")
 ## File layout
 
 ```
-math2vec-ft/
+finetune/
 ├── train_qwen_mnrl_multiview.py   # main training + in-domain eval
-├── slurm/                         # SLURM script(s)
-├── data/                          # symlink or download target for dataset
-├── checkpoints/                   # trained models
-├── logs/                          # SLURM output logs
 ├── requirements.txt
 └── README.md
-```
-
-## Citation
-
-```bibtex
-[TBD on paper acceptance]
 ```
 
 ## License
