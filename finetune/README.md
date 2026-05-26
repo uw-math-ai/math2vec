@@ -15,7 +15,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # Download dataset
-huggingface-cli download uw-math-ai/Math2Vec-embedding-dataset \
+huggingface-cli download https://anonymous-hf.up.railway.app/a/xczmsjlqejkf/
   --repo-type dataset \
   --local-dir ./data
 
@@ -125,7 +125,8 @@ either of these will change the split.
 
 The final model and ablation variants are available on HuggingFace:
 
-- **Final model**: [uw-math-ai/Math2Vec-Embedding-8B](https://huggingface.co/uw-math-ai/Math2Vec-Embedding-8B)
+- **Final model**: [Octen](https://huggingface.co/uw-math-ai/Math2Vec-Embedding-8B)
+[Qwen](https://huggingface.co/uw-math-ai/Math2Vec-Embedding-8B)
 - Ablations: see paper Appendix for full results
 
 ```python
