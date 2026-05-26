@@ -4,7 +4,7 @@ This project is aimed at training and evaluating a text embedding model that wor
 
 ## Origins
 
-This project grew out of prior work in large-scale mathematical theorem retrieval systems that provide semantic search over millions of mathematical theorems from sources such as arXiv, the Stacks Project, and other mathematical corpora. These systems demonstrate that embedding-based retrieval works well for informal mathematics, but their embedders are not designed for formal mathematics (Lean 4 code). math2vec addresses this gap: rather than building another search index, it focuses on benchmarking and improving embedders that must bridge both modalities — informal LaTeX and formal Lean — to enable the next generation of theorem search tools that span the informal/formal divide.
+This project grew out of prior work in large-scale mathematical theorem retrieval systems that provide semantic search over millions of mathematical theorems from sources such as arXiv, the Stacks Project, and other mathematical corpora. These systems demonstrate that embedding-based retrieval works well for informal mathematics, but their embedders are not designed for formal mathematics (Lean 4 code). This project addresses this gap: rather than building another search index, it focuses on benchmarking and improving embedders that must bridge both modalities — informal LaTeX and formal Lean — to enable the next generation of theorem search tools that span the informal/formal divide.
 
 ## Goals
 
@@ -20,22 +20,6 @@ dataset/       — dataset construction pipelines
 finetunue/ - model finetuning 
 benchmarking/  — embedding benchmark and evaluation
 judge/ - pipeline to judge synthetic data
-
-## Dataset
-
-- LeanBlueprintParser.py — extracts theorem statements from community Lean 4 blueprint projects using web scraping tools, producing blueprints.json.
-- TheoremTranslatorV2.py — translates/restates theorems via an LLM API and saves results to timestamped CSVs.
-
-## Benchmarking
-
-- Supports any sentence-transformers-compatible model (default: Qwen/Qwen3-Embedding-0.6B) plus a random-vector baseline.
-- Evaluation metrics: Precision@K, Recall@K, Mean Reciprocal Rank, and Percent Correct Pairs (bitext mining).
-
-Run:
-
-cd benchmarking
-pip install -r requirements.txt
-python src/main.py
 
 ## Notes
 
