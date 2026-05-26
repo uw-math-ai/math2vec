@@ -1,10 +1,10 @@
-# math2vec
+# Project
 
-**math2vec** is a project aimed at training and evaluating a text embedding model that works well on mathematical content across two modalities: natural language (LaTeX) and formal Lean 4 code.
+This project is aimed at training and evaluating a text embedding model that works well on mathematical content across two modalities: natural language (LaTeX) and formal Lean 4 code.
 
 ## Origins
 
-math2vec grew out of prior work in large-scale mathematical theorem retrieval systems that provide semantic search over millions of mathematical theorems from sources such as arXiv, the Stacks Project, and other mathematical corpora. These systems demonstrate that embedding-based retrieval works well for informal mathematics, but their embedders are not designed for formal mathematics (Lean 4 code). math2vec addresses this gap: rather than building another search index, it focuses on benchmarking and improving embedders that must bridge both modalities — informal LaTeX and formal Lean — to enable the next generation of theorem search tools that span the informal/formal divide.
+This project grew out of prior work in large-scale mathematical theorem retrieval systems that provide semantic search over millions of mathematical theorems from sources such as arXiv, the Stacks Project, and other mathematical corpora. These systems demonstrate that embedding-based retrieval works well for informal mathematics, but their embedders are not designed for formal mathematics (Lean 4 code). math2vec addresses this gap: rather than building another search index, it focuses on benchmarking and improving embedders that must bridge both modalities — informal LaTeX and formal Lean — to enable the next generation of theorem search tools that span the informal/formal divide.
 
 ## Goals
 
@@ -16,8 +16,10 @@ To develop (or identify) an embedder that performs well on both natural-language
 
 ## Repository structure
 
-dataset/       — dataset construction pipeline
+dataset/       — dataset construction pipelines
+finetunue/ - model finetuning 
 benchmarking/  — embedding benchmark and evaluation
+judge/ - pipeline to judge synthetic data
 
 ## Dataset
 
