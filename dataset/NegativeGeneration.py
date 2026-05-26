@@ -6,9 +6,9 @@ from pydantic import BaseModel
 from vllm import LLM, SamplingParams
 from vllm.sampling_params import StructuredOutputsParams
 
-INPUT_FILE = '/gpfs/scrubbed/raosa/results/processed_train.jsonl'
-OUTPUT_FILE = '/gpfs/scrubbed/raosa/results/hard_negatives.jsonl'
-CHUNK_SIZE = 1000  # Reduced from 5000 so you don't lose as much on a node crash
+INPUT_FILE = 'PATH'
+OUTPUT_FILE = 'PATH'
+CHUNK_SIZE = 1000 
 
 class NegativeGeneration(BaseModel):
     hard_negatives : List[str]

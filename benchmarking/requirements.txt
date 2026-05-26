@@ -1,7 +1,0 @@
-numpy
-sentence-transformers
-faiss-cpu
-datasets
-matplotlib
-torch
-mirb

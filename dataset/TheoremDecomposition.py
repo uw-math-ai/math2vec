@@ -4,8 +4,8 @@ from pydantic import BaseModel
 from typing import List
 import json, os
 
-INPUT_FILE = '/gpfs/home/raosa/math2vec/dataset/train.json'
-OUTPUT_FILE = '/gpfs/scrubbed/raosa/results/processed_train.jsonl'
+INPUT_FILE = 'PATH'
+OUTPUT_FILE = 'PATH'
 CHUNK_SIZE = 5000
 
 class TheoremDeconstruction(BaseModel):

@@ -280,7 +280,6 @@ try:
             }
         )
 
-        # Save to disk after each blueprint is processed
         save_to_disk(blueprint_records)
         print(f"  Saved {len(records)} theorems to {OUTPUT_FILE}")
 
