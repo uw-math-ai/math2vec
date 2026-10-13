@@ -9,8 +9,8 @@ corpus (curated theorems, HuggingFace dataset slice, etc.) and an output file.
 
 | File | Purpose |
 |---|---|
-| `run_demo.py` | Apply every perturbation in the registry to a curated set of 10 theorems. Mirrors what `hackathon-demo/demo.ipynb` did, but as plain Python. Outputs JSONL. |
-| `run_hf_corpus.py` | Pull anchors from a HuggingFace dataset (`FrenzyMath/mathlib_informal_v4.19.0`), run perturbation chains, and write JSONL. Replacement for the archived `hackathon-demo/perturb.ipynb`. |
+| `run_demo.py` | Apply every perturbation in the registry to a curated set of 10 theorems. Outputs JSONL. |
+| `run_hf_corpus.py` | Pull anchors from a HuggingFace dataset (`FrenzyMath/mathlib_informal_v4.19.0`), run perturbation chains, and write JSONL. |
 
 ## Usage
 
@@ -35,9 +35,3 @@ You don't touch the runners. Instead:
 3. Add a test in `tests/test_<perturbation>.py`.
 
 The runners pick it up automatically from the registry.
-
-## What was here before
-
-`perturb.ipynb` used to live in this directory as a notebook prototype. It has
-been moved to `hackathon-demo/perturb.ipynb` as a frozen artifact of the
-hackathon. All active work has moved to plain Python files.

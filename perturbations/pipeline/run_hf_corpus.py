@@ -2,8 +2,7 @@
 """
 run_hf_corpus.py — apply perturbation chains to a slice of a HuggingFace dataset.
 
-Replaces the archived ``hackathon-demo/perturb.ipynb`` notebook with a plain
-Python CLI that:
+A plain Python CLI that:
 
     1. pulls anchors from a HuggingFace dataset (``FrenzyMath/mathlib_informal_v4.19.0``
        by default),

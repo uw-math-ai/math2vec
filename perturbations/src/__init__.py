@@ -8,6 +8,5 @@ Importable modules:
 Subpackages:
     instance_graph      - dump_class_hierarchy.py: dumps Mathlib's `extends`
                           hierarchy to data/class_hierarchy.jsonl, which
-                          typeclass_mutate reads. (Older instance-graph builders
-                          live in archive/.)
+                          typeclass_mutate reads.
 """

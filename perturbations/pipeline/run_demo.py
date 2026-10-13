@@ -2,8 +2,7 @@
 """
 run_demo.py — apply every registered perturbation to a curated set of theorems.
 
-This is the Python replacement for ``hackathon-demo/demo.ipynb``. It runs all
-single perturbations plus a fixed set of chained combinations against 10
+It runs all single perturbations plus a fixed set of chained combinations against 10
 curated Lean theorems and writes the results to a JSONL file.
 
 Usage:
@@ -51,8 +50,8 @@ from wiggle.registry import PERTURBATIONS  # noqa: E402
 
 
 # ── Curated theorems ──────────────────────────────────────────────────────────
-# These are the same 10 hand-picked Mathlib statements used by the hackathon
-# demo notebook. Kept verbatim so demo outputs are directly comparable.
+# 10 hand-picked Mathlib statements, kept fixed so demo outputs stay
+# comparable across runs.
 TOY_THEOREMS: list[dict[str, str]] = [
     {
         "id": "nat_pos_of_ne_zero",

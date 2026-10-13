@@ -22,7 +22,6 @@ Previously: DALAB-May-2026-Lean-wiggle-wiggle
 │   ├── typeclass_mutate.py              # Typeclass perturbations; hierarchy is read
 │   │                                    #   from data/class_hierarchy.jsonl (no hardcoding)
 │   ├── instance_graph/                  # dump_class_hierarchy.py → class_hierarchy.jsonl
-│   │                                    #   (older instance-dump tools live in archive/)
 │   └── wiggle/                          # Phase 2: clean perturbation package
 │       ├── lean_runner.py               # Single home for `lake env lean` invocations
 │       ├── registry.py                  # Canonical PERTURBATIONS list (single source of truth)
@@ -42,7 +41,7 @@ Previously: DALAB-May-2026-Lean-wiggle-wiggle
 │       └── lexical.py                   #   non-neural similarity: what word matching sees
 │
 ├── pipeline/                            # CLI runners on top of src/wiggle/
-│   ├── run_demo.py                      # 10 curated theorems → JSONL (replaces demo.ipynb)
+│   ├── run_demo.py                      # 10 curated theorems → JSONL
 │   ├── run_hf_corpus.py                 # HuggingFace dataset slice → sharded JSONL
 │   ├── run_benchmark_review.py          # benchmark-CSV anchors → audited depth-1 review
 │   ├── run_deep_chains.py               # one anchor → whole perturbation tree
@@ -50,27 +49,25 @@ Previously: DALAB-May-2026-Lean-wiggle-wiggle
 │   ├── verify_variants.py               # re-elaborate every variant standalone
 │   └── analyze_geometry.py              # where do the variants sit? (lexical geometry)
 │
-├── scripts/                             # Per-tactic CLI demos, bench, and Slurm wrapper
+├── scripts/                             # Benchmark, Slurm + Tillicum job scripts
 │   ├── bench_backends.py                # server vs subprocess wallclock comparison
-│   └── wiggle.sbatch                    # generic Slurm batch script for run_hf_corpus.py
+│   ├── wiggle.sbatch                    # generic Slurm batch script for run_hf_corpus.py
+│   └── tillicum_*.sh, tillicum_tests.slurm  # Tillicum setup + test job
 ├── tests/                               # Unit tests — see tests/README.md
-├── docs/                                # Design docs + HYAK_SETUP.md
-├── hackathon-demo/                      # Frozen artifacts from the hackathon presentation
+├── docs/                                # Design docs + HYAK/TILLICUM setup guides
 └── data/                                # Generated dumps (gitignored)
 ```
 
 See each subdirectory's `README.md` for details:
 
 - [`tests/README.md`](tests/README.md) — how to run the fast vs. live test suites, mocking pattern, recipe for adding a new perturbation test.
-- [`scripts/README.md`](scripts/README.md) — per-tactic demos, benchmark, Slurm wrapper.
+- [`scripts/README.md`](scripts/README.md) — benchmark, Slurm and Tillicum job scripts.
 - [`pipeline/README.md`](pipeline/README.md) — corpus runners and dataset format.
 - [`docs/perturbations.md`](docs/perturbations.md) — catalogue of all 28 perturbations: what each one does, its value, where it performs well, and its limitations.
 - [`docs/difficulty-spectrum.md`](docs/difficulty-spectrum.md) — which perturbations a model should find hard, and why. Ranks all 28 by how much of the change is hidden from word matching (measured) and by how much knowledge is needed to get it right (predicted).
 - [`docs/HYAK_SETUP.md`](docs/HYAK_SETUP.md) — end-to-end guide for running on UW Hyak (or any Slurm cluster): env bootstrap, dataset pre-download, submit/monitor, resume after walltime, sizing table.
 - [`docs/TILLICUM_SETUP.md`](docs/TILLICUM_SETUP.md) — running the test suites on UW's Tillicum GPU cluster under the `mathai` account.
 - [`docs/Final Design Doc.md`](docs/Final%20Design%20Doc.md) — overall scaling roadmap.
-
-The hackathon demo lives in [`hackathon-demo/`](hackathon-demo/).
 
 ## What the perturbations look like so far
 

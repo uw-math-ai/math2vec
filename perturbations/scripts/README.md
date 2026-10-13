@@ -1,42 +1,13 @@
 # Scripts
 
-Standalone CLIs that aren't part of the main `pipeline/` runners. They split
-into two groups:
+Operational helpers that aren't part of the main `pipeline/` runners:
+benchmarking and cluster-job scripts. For the production runners that walk a
+corpus and write JSONL, see [`pipeline/`](../pipeline/) instead.
 
-1. **Per-tactic Lean demos** — minimal subprocess wrappers around each Lean
-   tactic in `Wiggle.lean`. Used for fast tactic-level debugging without
-   booting the full Python pipeline.
-2. **Operational scripts** — benchmarking and cluster-job helpers. These do
-   go through `src/wiggle/`.
-
-For the production runners that walk a corpus and write JSONL, see
-[`pipeline/`](../pipeline/) instead.
-
-## Per-tactic Lean demos
-
-| File | Lean tactic | What it does |
-|---|---|---|
-| `negate_theorem.py` | `negate_state` | Hard-coded Lean snippet, runs `lake env lean`, prints the negated `extract_goal` line. |
-| `contrapose_theorem.py` | `contrapositive` | Same shape as above, for contrapositive. |
-| `converse_theorem.py` | `converse` | Same shape, for converse. |
-| `generalize_theorem.py` | `drop_unused_hyp` (historical name `generalize`) | Same shape; strips unused Prop-valued hypotheses. |
-| `specialize.py` | (none — specialisation experiment) | Self-contained Lean snippet for substituting specific types. |
-
-These scripts intentionally **do not** import from `src/wiggle/`. They each
-embed a Lean snippet as a Python string, spawn `subprocess.run(["lake", "env",
-"lean", tmp_path], ...)`, and regex-grep the output for
-`^theorem .*extracted.*$`. The point is that when you edit a tactic macro in
-[`Wiggle.lean`](../Wiggle.lean) you can verify it in 15 seconds without
-threading through the registry, transform wrappers, and chain runner.
-
-```bash
-# Smoke-test a single tactic after editing Wiggle.lean:
-python scripts/negate_theorem.py
-python scripts/contrapose_theorem.py
-```
-
-Each is around 40 lines. If you want to add a new tactic-level demo, copy
-`negate_theorem.py`, change the `LEAN_CODE` string, and you're done.
+To check a tactic after editing [`Wiggle.lean`](../Wiggle.lean), run the live
+Lean tests (`WIGGLE_RUN_LEAN_INTEGRATION=1`, see
+[`tests/README.md`](../tests/README.md)) or `python pipeline/run_demo.py
+--singles-only`.
 
 ## Operational scripts
 
@@ -101,9 +72,8 @@ The two directories are similar enough that the boundary is worth spelling out:
 - **`pipeline/`** holds the *runners* — Python entry points that walk an input
   corpus (curated theorems, HF dataset slice) and emit JSONL. They depend on
   `src/wiggle/`.
-- **`scripts/`** holds *one-off CLIs* — Lean-tactic demos that bypass the
-  library entirely, plus operational helpers (benchmark, Slurm wrapper) that
-  are conceptually separate from the corpus runners.
+- **`scripts/`** holds *operational helpers* (benchmark, Slurm/Tillicum
+  wrappers) that are conceptually separate from the corpus runners.
 
 If you're writing something that produces dataset records, it goes under
 `pipeline/`. If you're writing a debugging tool or a job-submission helper, it
