@@ -1,0 +1,72 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# scripts/tillicum_setup.sh — one-time Tillicum setup. Run on the LOGIN node
+# (it is all downloads; nothing here is compute-heavy):
+#
+#     bash scripts/tillicum_setup.sh
+#
+# Idempotent: re-running skips whatever is already installed. Installs into
+# $TILLICUM_BASE (default /gpfs/projects/mathai/$USER, see tillicum_env.sh):
+#     elan (Lean toolchain manager)   → $ELAN_HOME
+#     conda env with requirements.txt → $WIGGLE_ENV
+#     prebuilt Mathlib .olean cache   → <project>/.lake
+#
+# Compiling Wiggle.lean itself (`lake build Wiggle`) is left to the test job,
+# since login nodes are not for compute.
+# ─────────────────────────────────────────────────────────────────────────────
+
+set -eo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$HERE/.." && pwd)"
+# shellcheck source=tillicum_env.sh
+source "$HERE/tillicum_env.sh"
+
+echo "project root : $PROJECT_ROOT"
+echo "base dir     : $TILLICUM_BASE"
+echo "elan home    : $ELAN_HOME"
+echo "conda env    : $WIGGLE_ENV"
+echo
+
+if [[ "$(hostname)" != tillicum-login* ]]; then
+    echo "warning: expected a tillicum-login node, got $(hostname)" >&2
+fi
+
+mkdir -p "$TILLICUM_BASE" "$XDG_CACHE_HOME" "$CONDA_PKGS_DIRS" "$(dirname "$WIGGLE_ENV")"
+
+# ── 1. elan ──────────────────────────────────────────────────────────────────
+if [[ -x "$ELAN_HOME/bin/elan" ]]; then
+    echo "[1/3] elan already installed: $("$ELAN_HOME/bin/elan" --version)"
+else
+    echo "[1/3] installing elan into $ELAN_HOME"
+    curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+        | sh -s -- -y --no-modify-path --default-toolchain none
+fi
+
+# ── 2. conda env ─────────────────────────────────────────────────────────────
+if ! type module >/dev/null 2>&1; then
+    # shellcheck disable=SC1091
+    source /etc/profile
+fi
+module load conda
+eval "$(conda shell.bash hook)"
+if [[ -d "$WIGGLE_ENV" ]]; then
+    echo "[2/3] conda env exists: $WIGGLE_ENV"
+else
+    echo "[2/3] creating conda env at $WIGGLE_ENV"
+    conda create -y --prefix "$WIGGLE_ENV" python=3.12
+fi
+conda activate "$WIGGLE_ENV"
+pip install --upgrade pip
+pip install -r "$PROJECT_ROOT/requirements.txt"
+
+# ── 3. Mathlib ───────────────────────────────────────────────────────────────
+# Fetches Mathlib (git) plus its prebuilt .olean files so nothing has to be
+# compiled from source. Also installs the toolchain pinned in lean-toolchain.
+echo "[3/3] fetching Mathlib cache (first run: several GB, ~10 min)"
+cd "$PROJECT_ROOT"
+lake exe cache get
+
+echo
+echo "Setup done. Next, from $PROJECT_ROOT:"
+echo "    sbatch scripts/tillicum_tests.slurm"

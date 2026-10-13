@@ -67,6 +67,7 @@ See each subdirectory's `README.md` for details:
 - [`docs/perturbations.md`](docs/perturbations.md) — catalogue of all 28 perturbations: what each one does, its value, where it performs well, and its limitations.
 - [`docs/difficulty-spectrum.md`](docs/difficulty-spectrum.md) — which perturbations a model should find hard, and why. Ranks all 28 by how much of the change is hidden from word matching (measured) and by how much knowledge is needed to get it right (predicted).
 - [`docs/HYAK_SETUP.md`](docs/HYAK_SETUP.md) — end-to-end guide for running on UW Hyak (or any Slurm cluster): env bootstrap, dataset pre-download, submit/monitor, resume after walltime, sizing table.
+- [`docs/TILLICUM_SETUP.md`](docs/TILLICUM_SETUP.md) — running the test suites on UW's Tillicum GPU cluster under the `mathai` account.
 - [`docs/Final Design Doc.md`](docs/Final%20Design%20Doc.md) — overall scaling roadmap.
 
 The hackathon demo lives in [`hackathon-demo/`](hackathon-demo/).

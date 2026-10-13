@@ -44,6 +44,9 @@ Each is around 40 lines. If you want to add a new tactic-level demo, copy
 |---|---|
 | `bench_backends.py` | Wallclock comparison of the two Lean execution backends (`server` vs `subprocess`). Runs 5 `run_lean` calls each, prints first-call and warm-average timings. Use after editing `src/wiggle/lean_server.py` to confirm the persistent server still gives the ~70x warm speedup. |
 | `wiggle.sbatch` | Generic Slurm batch script for `pipeline/run_hf_corpus.py`. Sized for a 32-core / 64 GB / 24 h job by default; tweak the `#SBATCH` block for your cluster. Forwards `SIGUSR1` from Slurm to the Python child 5 minutes before walltime so the run drains cleanly and writes its last shard. |
+| `tillicum_setup.sh` | One-time Tillicum login-node setup: elan, conda env from `requirements.txt`, prebuilt Mathlib cache, all under `/gpfs/projects/mathai/$USER`. |
+| `tillicum_tests.slurm` | Runs the test suites on Tillicum (build, mocked pytest, live-Lean pytest, typeclass smoke, demo run, optional benchmark review). See [`docs/TILLICUM_SETUP.md`](../docs/TILLICUM_SETUP.md). |
+| `tillicum_env.sh` | Shared paths + conda activation, sourced by the two Tillicum scripts. |
 
 ### Benchmarking
 
