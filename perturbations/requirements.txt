@@ -1,0 +1,8 @@
+# Python dependencies for the Wiggle library, pipeline runners, and tests.
+# Lean + Mathlib are managed separately by elan / lake (see lean-toolchain).
+numpy
+pandas
+pyarrow
+matplotlib
+scikit-learn
+pytest

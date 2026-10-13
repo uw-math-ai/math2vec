@@ -1,0 +1,172 @@
+{
+  "n_anchors": 24,
+  "n_variants": 298,
+  "background_similarity": {
+    "tfidf_token": 0.23079234310546912,
+    "tfidf_char": 0.10466627953001803,
+    "jaccard": 0.3440767042800041,
+    "sequence": 0.2922315388486679
+  },
+  "per_perturbation": [
+    {
+      "perturbation": "negate",
+      "semantic_class": "contradictory",
+      "n": 24,
+      "surface_delta": 0.12612285537161227,
+      "meaning_delta": 1.0,
+      "signal": 0.8738771446283877
+    },
+    {
+      "perturbation": "quantifier_swap",
+      "semantic_class": "graded",
+      "n": 2,
+      "surface_delta": 0.0,
+      "meaning_delta": 0.67,
+      "signal": 0.67
+    },
+    {
+      "perturbation": "eq_to_le",
+      "semantic_class": "graded",
+      "n": 12,
+      "surface_delta": 0.0031239879995782482,
+      "meaning_delta": 0.67,
+      "signal": 0.6668760120004218
+    },
+    {
+      "perturbation": "connective_swap",
+      "semantic_class": "graded",
+      "n": 21,
+      "surface_delta": 0.0032366749615574397,
+      "meaning_delta": 0.67,
+      "signal": 0.6667633250384426
+    },
+    {
+      "perturbation": "const_to_zero_one",
+      "semantic_class": "graded",
+      "n": 18,
+      "surface_delta": 0.0038993508083630113,
+      "meaning_delta": 0.67,
+      "signal": 0.666100649191637
+    },
+    {
+      "perturbation": "strictness_swap",
+      "semantic_class": "graded",
+      "n": 18,
+      "surface_delta": 0.004137956012513211,
+      "meaning_delta": 0.67,
+      "signal": 0.6658620439874868
+    },
+    {
+      "perturbation": "forall_to_exists",
+      "semantic_class": "graded",
+      "n": 1,
+      "surface_delta": 0.005605153158049103,
+      "meaning_delta": 0.67,
+      "signal": 0.6643948468419509
+    },
+    {
+      "perturbation": "arith_op_swap",
+      "semantic_class": "graded",
+      "n": 13,
+      "surface_delta": 0.0058394655457726374,
+      "meaning_delta": 0.67,
+      "signal": 0.6641605344542274
+    },
+    {
+      "perturbation": "bound_tighter",
+      "semantic_class": "graded",
+      "n": 2,
+      "surface_delta": 0.006147631974661838,
+      "meaning_delta": 0.67,
+      "signal": 0.6638523680253382
+    },
+    {
+      "perturbation": "flip_bound",
+      "semantic_class": "graded",
+      "n": 18,
+      "surface_delta": 0.013816905692551007,
+      "meaning_delta": 0.67,
+      "signal": 0.656183094307449
+    },
+    {
+      "perturbation": "tc_sibling_swap",
+      "semantic_class": "graded",
+      "n": 11,
+      "surface_delta": 0.022398247647824387,
+      "meaning_delta": 0.67,
+      "signal": 0.6476017523521757
+    },
+    {
+      "perturbation": "tc_weaken_hyp",
+      "semantic_class": "graded",
+      "n": 10,
+      "surface_delta": 0.030068327699006026,
+      "meaning_delta": 0.67,
+      "signal": 0.639931672300994
+    },
+    {
+      "perturbation": "tc_strengthen_hyp",
+      "semantic_class": "entailed",
+      "n": 17,
+      "surface_delta": 0.026279485589864038,
+      "meaning_delta": 0.34,
+      "signal": 0.313720514410136
+    },
+    {
+      "perturbation": "specialize_type",
+      "semantic_class": "entailed",
+      "n": 19,
+      "surface_delta": 0.24166298371116324,
+      "meaning_delta": 0.34,
+      "signal": 0.09833701628883679
+    },
+    {
+      "perturbation": "premise_permute",
+      "semantic_class": "equivalent",
+      "n": 15,
+      "surface_delta": 0.0,
+      "meaning_delta": 0.0,
+      "signal": 0.0
+    },
+    {
+      "perturbation": "implicit_explicit_toggle",
+      "semantic_class": "equivalent",
+      "n": 24,
+      "surface_delta": 0.00398906733943083,
+      "meaning_delta": 0.0,
+      "signal": -0.00398906733943083
+    },
+    {
+      "perturbation": "uncurry",
+      "semantic_class": "equivalent",
+      "n": 19,
+      "surface_delta": 0.023892651764924167,
+      "meaning_delta": 0.0,
+      "signal": -0.023892651764924167
+    },
+    {
+      "perturbation": "definitional_unfold",
+      "semantic_class": "equivalent",
+      "n": 6,
+      "surface_delta": 0.06341637500821318,
+      "meaning_delta": 0.0,
+      "signal": -0.06341637500821318
+    },
+    {
+      "perturbation": "de_morgan_rewrite",
+      "semantic_class": "equivalent",
+      "n": 24,
+      "surface_delta": 0.1179022107347194,
+      "meaning_delta": 0.0,
+      "signal": -0.1179022107347194
+    },
+    {
+      "perturbation": "alpha_rename",
+      "semantic_class": "equivalent",
+      "n": 24,
+      "surface_delta": 0.7648299877585387,
+      "meaning_delta": 0.0,
+      "signal": -0.7648299877585387
+    }
+  ]
+}
