@@ -109,20 +109,22 @@ def _process_anchor(
     t0 = time.monotonic()
     _LOGGER.event("anchor_start", anchor_id=anchor_sig)
     try:
-        n_records = 0
-        for record in run_pipeline(
-            [anchor],
-            n_permutations=n_permutations,
-            max_chain_depth=max_chain_depth,
-            random_seed=random_seed,
-            verify_compile=verify_compile,
-            verbose=False,
-        ):
+        # Collected first so an anchor that raises part-way leaves nothing
+        # behind in the shard buffer.
+        records = list(
+            run_pipeline(
+                [anchor],
+                n_permutations=n_permutations,
+                max_chain_depth=max_chain_depth,
+                random_seed=random_seed,
+                verify_compile=verify_compile,
+                verbose=False,
+            )
+        )
+        for record in records:
             _SHARD.write(record)
-            n_records += 1
-        # Per-anchor flush — guarantees we never lose more than the work for
-        # the *currently in-flight* anchor on a hard kill.
-        _SHARD.flush()
+        _SHARD.commit_anchor(anchor_sig)
+        n_records = len(records)
         _LOGGER.event(
             "anchor_done",
             anchor_id=anchor_sig,
@@ -202,7 +204,7 @@ def run_parallel(
             forwarded into ``wiggle.pipeline.run_pipeline``.
         resume: if true (default), anchors whose signature already appears in
             any shard are skipped.
-        flush_every: records per shard between atomic rewrites.
+        flush_every: records buffered per shard between appends.
         drain_event: when set, the orchestrator stops submitting and drains.
             Used by tests; production wires ``SIGUSR1`` to this event.
         mp_context: ``"spawn"`` (default; cleanest on macOS) or ``"fork"``

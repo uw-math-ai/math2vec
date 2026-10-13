@@ -3,8 +3,9 @@ Truth-value propagation through a perturbation path.
 
 We never re-prove anything in Lean to determine truth — instead, every
 perturbation declares (in the registry) how it maps anchor truth to variant
-truth. ``is_true`` composes those rules across an arbitrary path; ``compose_truth``
-exposes the same logic on raw truth values for the chain runner.
+truth. ``is_true`` composes those rules across an arbitrary path; the chain
+runner applies the same per-step rules. ``compose_truth`` is a separate
+heuristic for merging two independently-derived labels.
 
 Truth lattice (string-encoded for JSONL friendliness):
 
@@ -49,13 +50,12 @@ def is_true(perturbation_path: Iterable[str], anchor_truth: TruthValue = ANCHOR_
 
 
 def compose_truth(so_far: TruthValue, new_val: TruthValue) -> TruthValue:
-    """Combine two truth labels at chain-application time.
+    """Combine two independently-derived truth labels.
 
-    Used by ``apply_chain`` when accumulating the running truth across steps.
-    Distinct from ``is_true``: ``compose_truth`` operates on already-evaluated
-    truth values (e.g. when a step's propagation rule yielded ``"false"`` and
-    you want to fold it into the running total), whereas ``is_true`` walks
-    perturbation NAMES.
+    Not for chains: a propagation rule's output already *is* the new label,
+    so folding it into the previous label again double-counts (``negate``
+    twice would come out ``false``). Chains go through ``is_true`` / the
+    per-step rules directly.
 
     Composition rules:
 

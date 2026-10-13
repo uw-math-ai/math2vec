@@ -185,7 +185,9 @@ PERTURBATIONS: list[Perturbation] = [
     Perturbation(
         name="bound_tighter",
         fn=bounds.bound_tighter,
-        propagation={"true": "unknown", "false": "false", "unknown": "unknown"},
+        # The edited bound may sit in a hypothesis, so a false statement can
+        # become true (n ≤ 1 → n = 0  ↦  n ≤ 0 → n = 0).
+        propagation={"true": "unknown", "false": "unknown", "unknown": "unknown"},
         description="Tighten numeric bound by ±1 in the tighter direction. Unknown.",
         layer="bounds",
     ),

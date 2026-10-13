@@ -109,3 +109,11 @@ if __name__ == "__main__":
             fn()
             print(f"  ✓ {name}")
     print(f"\nAll registry tests passed ({len(PERTURBATIONS)} perturbations registered).")
+
+
+def test_bound_tighter_does_not_keep_false_labels() -> None:
+    # The edited bound can sit in a hypothesis: n ≤ 1 → n = 0 (false)
+    # becomes n ≤ 0 → n = 0 (true).
+    from wiggle.registry import PROPAGATION_RULES
+
+    assert PROPAGATION_RULES["bound_tighter"]["false"] == "unknown"

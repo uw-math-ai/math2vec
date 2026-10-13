@@ -1,30 +1,29 @@
 """
-Sharded JSONL output with atomic rename + resume support.
+Sharded JSONL output with per-anchor completion markers + resume support.
 
 One ``ShardWriter`` per worker. Each writer owns ``part_<worker_id>.jsonl``
-exclusively — no inter-worker lock needed because every worker writes to a
-different file.
+and ``part_<worker_id>.done`` exclusively — no inter-worker lock needed
+because every worker writes to different files.
 
-Atomicity is achieved by buffering records in memory and rewriting the entire
-shard on every flush via a ``write -> fsync -> os.replace`` sequence:
+Records are buffered in memory and *appended* on flush (``write -> fsync``),
+so each record hits the disk once no matter how large the shard grows.
 
-    1. Serialize the full in-memory record list to ``part_NNNNN.jsonl.tmp``.
-    2. ``fsync`` to push bytes to disk.
-    3. ``os.replace(.tmp, .jsonl)`` — atomic on POSIX, atomic on Windows since
-       Python 3.3.
+Completion is tracked separately from the records: after every record of an
+anchor has been flushed, ``commit_anchor`` appends the anchor's signature to
+the ``.done`` file. Resume trusts only that file, so:
 
-If the process is killed mid-flush, the ``.tmp`` file is orphaned and the
-previous ``.jsonl`` (one flush old) is intact and resumable. The crash loses
-at most ``flush_every`` records of work per worker.
+  * an anchor that failed or was killed half-way is re-run, even if some of
+    its records reached the shard;
+  * an anchor that legitimately produced zero records is still marked done.
 
-Memory cost is the in-memory record list — bounded by the shard size. With
-~150k records × ~500 bytes/record per worker, that's ~75 MB per worker, which
-is fine even at 32 workers.
+When a writer reopens an existing shard it drops any records whose anchor
+isn't in the ``.done`` file (one atomic ``write -> fsync -> os.replace``
+rewrite at startup), so a re-run anchor never leaves duplicates behind. A
+crash mid-append leaves at most a truncated last line, which every reader
+skips.
 
-Resume model: at startup we scan every ``part_*.jsonl`` in the shard dir and
-collect ``anchor_signature`` values into a set. Anchors in that set are
-skipped. Orphaned ``.tmp`` files and partially-corrupt JSONL lines are simply
-ignored (decoder errors swallowed).
+Shards written before ``.done`` files existed have no marker file; for those,
+``scan_completed_anchors`` falls back to the signatures found in the records.
 """
 
 from __future__ import annotations
@@ -42,13 +41,14 @@ __all__ = [
 
 
 class ShardWriter:
-    """Atomic-rewrite JSONL writer for one shard.
+    """Append-only JSONL writer for one shard, with anchor completion markers.
 
     Usage::
 
-        with ShardWriter(shard_dir, worker_id=3, flush_every=50) as w:
-            for record in records:
+        with ShardWriter(shard_dir, worker_id=3) as w:
+            for record in anchor_records:
                 w.write(record)
+            w.commit_anchor(anchor_signature)
         # close() implicitly flushes on exit
 
     A ``ShardWriter`` is *not* thread-safe — each worker process owns one.
@@ -68,60 +68,58 @@ class ShardWriter:
 
         self._path = self.shard_dir / f"part_{worker_id:05d}.jsonl"
         self._tmp_path = self.shard_dir / f"part_{worker_id:05d}.jsonl.tmp"
+        self._done_path = self.shard_dir / f"part_{worker_id:05d}.done"
 
-        # If the shard already exists (resume case), load it so subsequent
-        # flushes don't lose what was there.
-        self._records: list[dict[str, Any]] = []
-        if self._path.exists():
-            self._records = list(_iter_jsonl(self._path))
-
-        self._pending_since_flush = 0
+        self._pending: list[dict[str, Any]] = []
+        self._n_on_disk = 0
+        if self._done_path.exists():
+            self._n_on_disk = self._drop_uncommitted()
+        elif self._path.exists():
+            # Legacy shard (no markers): keep it as-is.
+            self._n_on_disk = sum(1 for _ in _iter_jsonl(self._path))
+        # Created up front so a crash before the first commit can't make this
+        # shard look like a legacy one.
+        self._done_path.touch()
 
     @property
     def path(self) -> Path:
         """The on-disk shard file (without the ``.tmp`` suffix)."""
         return self._path
 
+    @property
+    def done_path(self) -> Path:
+        """The file listing this shard's completed anchor signatures."""
+        return self._done_path
+
     def write(self, record: dict[str, Any]) -> None:
-        """Append a record. Triggers a flush every ``flush_every`` writes."""
-        self._records.append(record)
-        self._pending_since_flush += 1
-        if self._pending_since_flush >= self.flush_every:
+        """Buffer a record. Triggers a flush every ``flush_every`` writes."""
+        self._pending.append(record)
+        if len(self._pending) >= self.flush_every:
             self.flush()
 
     def flush(self) -> None:
-        """Persist all buffered records atomically.
-
-        Writes the full in-memory list to a ``.tmp`` sibling, fsyncs, then
-        ``os.replace``s onto the real path. Safe to call when nothing is
-        pending (becomes a no-op).
-        """
-        if self._pending_since_flush == 0 and self._path.exists():
+        """Append buffered records to the shard and fsync. No-op when empty."""
+        if not self._pending:
             return
-        with self._tmp_path.open("w", encoding="utf-8") as f:
-            for r in self._records:
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        payload = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in self._pending)
+        with self._path.open("a", encoding="utf-8") as f:
+            f.write(payload)
             f.flush()
-            try:
-                os.fsync(f.fileno())
-            except OSError:
-                # Some filesystems (e.g. tmpfs) don't support fsync. The
-                # os.replace below is still atomic; we just lose the
-                # durability guarantee on crash.
-                pass
-        os.replace(self._tmp_path, self._path)
-        self._pending_since_flush = 0
+            _fsync(f)
+        self._n_on_disk += len(self._pending)
+        self._pending = []
+
+    def commit_anchor(self, anchor_signature: str) -> None:
+        """Flush, then durably record ``anchor_signature`` as complete."""
+        self.flush()
+        with self._done_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(anchor_signature, ensure_ascii=False) + "\n")
+            f.flush()
+            _fsync(f)
 
     def close(self) -> None:
         """Final flush. Idempotent — safe to call from a finally block."""
         self.flush()
-        # Clean up any leftover .tmp from a half-finished flush — won't exist
-        # under normal flow because os.replace atomically removed it.
-        try:
-            if self._tmp_path.exists():
-                self._tmp_path.unlink()
-        except OSError:
-            pass
 
     def __enter__(self) -> "ShardWriter":
         return self
@@ -130,27 +128,50 @@ class ShardWriter:
         self.close()
 
     def __len__(self) -> int:
-        return len(self._records)
+        return self._n_on_disk + len(self._pending)
+
+    def _drop_uncommitted(self) -> int:
+        """Rewrite the shard without records of uncommitted anchors.
+
+        Returns the number of records kept. Records without an
+        ``anchor_signature`` can't be attributed to an anchor and are kept.
+        """
+        if not self._path.exists():
+            return 0
+        done = _read_done(self._done_path)
+        kept = [
+            r for r in _iter_jsonl(self._path)
+            if r.get("anchor_signature") is None or r["anchor_signature"] in done
+        ]
+        with self._tmp_path.open("w", encoding="utf-8") as f:
+            for r in kept:
+                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            f.flush()
+            _fsync(f)
+        os.replace(self._tmp_path, self._path)
+        return len(kept)
 
 
 def scan_completed_anchors(shard_dir: Path | str) -> set[str]:
-    """Return the set of ``anchor_signature`` values present in any shard.
+    """Return the set of anchor signatures that finished in any shard.
 
-    Used at startup to decide which anchors to skip. Robust to:
+    Reads the ``part_*.done`` marker files. A ``part_*.jsonl`` without a
+    sibling ``.done`` file predates the markers; its record signatures are
+    used instead. Robust to:
 
       * the shard directory not existing yet (returns empty set),
       * orphaned ``.tmp`` files (ignored — we glob ``part_*.jsonl`` only),
       * partially-truncated last lines (decoder errors are swallowed).
-
-    The ``anchor_signature`` key is the one ``run_pipeline`` writes into every
-    record; if a record is missing the key (e.g. malformed) it's silently
-    skipped.
     """
     shard_dir = Path(shard_dir)
     seen: set[str] = set()
     if not shard_dir.is_dir():
         return seen
+    for done_path in sorted(shard_dir.glob("part_*.done")):
+        seen |= _read_done(done_path)
     for path in sorted(shard_dir.glob("part_*.jsonl")):
+        if path.with_suffix(".done").exists():
+            continue
         for record in _iter_jsonl(path):
             sig = record.get("anchor_signature")
             if sig:
@@ -162,17 +183,29 @@ def iter_shard_records(shard_dir: Path | str) -> Iterator[dict[str, Any]]:
     """Yield every record across every shard, in deterministic file order.
 
     Used by post-processing tools (parquet conversion, dataset card preview,
-    etc.). Same robustness guarantees as ``scan_completed_anchors``.
+    etc.). Same robustness guarantees as ``scan_completed_anchors``. Records
+    of anchors that never committed are skipped.
     """
     shard_dir = Path(shard_dir)
     if not shard_dir.is_dir():
         return
     for path in sorted(shard_dir.glob("part_*.jsonl")):
-        yield from _iter_jsonl(path)
+        done_path = path.with_suffix(".done")
+        if not done_path.exists():
+            yield from _iter_jsonl(path)
+            continue
+        done = _read_done(done_path)
+        for r in _iter_jsonl(path):
+            if r.get("anchor_signature") is None or r["anchor_signature"] in done:
+                yield r
 
 
-def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
-    """Yield JSON-decoded records from a JSONL file, skipping bad lines."""
+def _read_done(path: Path) -> set[str]:
+    return {sig for sig in _iter_jsonl(path) if isinstance(sig, str) and sig}
+
+
+def _iter_jsonl(path: Path) -> Iterator[Any]:
+    """Yield JSON-decoded values from a JSONL file, skipping bad lines."""
     with path.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -182,3 +215,12 @@ def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
                 yield json.loads(line)
             except json.JSONDecodeError:
                 continue
+
+
+def _fsync(f: Any) -> None:
+    try:
+        os.fsync(f.fileno())
+    except OSError:
+        # Some filesystems (e.g. tmpfs) don't support fsync; we just lose
+        # the durability guarantee on crash.
+        pass

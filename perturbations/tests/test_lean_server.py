@@ -533,3 +533,44 @@ class TestRealLeanServer:
         assert result is not None
         sig, type_str = result
         assert isinstance(sig, str) and isinstance(type_str, str)
+
+
+# ─── Startup cleanup + extract_goal parsing ─────────────────────────────────────
+
+
+class TestStartupFailure:
+    def test_failed_initialize_closes_the_spawned_process(self, tmp_path) -> None:
+        proc = _FakeLeanProcess()
+
+        def fail(_params: Any) -> Any:
+            raise RuntimeError("boom")
+
+        proc.handlers["initialize"] = fail
+        with mock.patch("subprocess.Popen", return_value=proc):
+            with pytest.raises(LeanServerCrash):
+                LeanLspServer(tmp_path, startup_timeout=2.0)
+        assert "exit" in [n["method"] for n in proc.received_notifications]
+        assert proc.returncode is not None
+
+
+class TestExtractGoal:
+    def _extract(self, lean_output: str) -> tuple[str, str] | None:
+        from wiggle import lean_runner
+
+        with mock.patch.object(lean_runner, "run_lean", return_value=lean_output):
+            return lean_runner.extract_goal("intro n", "∀ (n : ℕ), n = n")
+
+    def test_context_binders_are_folded_into_the_type(self) -> None:
+        out = self._extract("info:\ntheorem foo.extracted_1 (n : ℕ) : n = n := sorry\n")
+        assert out == ("theorem foo.extracted_1 (n : ℕ)", "∀ (n : ℕ), n = n")
+
+    def test_universe_list_is_not_mistaken_for_binders(self) -> None:
+        out = self._extract(
+            "info:\ntheorem foo.extracted_1.{u_1, u_2} {α : Type u_1} : α = α := sorry\n"
+        )
+        assert out is not None
+        assert out[1] == "∀ {α : Type u_1}, α = α"
+
+    def test_empty_context_leaves_type_unchanged(self) -> None:
+        out = self._extract("info:\ntheorem foo.extracted_1 : ∀ (n : ℕ), n = n := sorry\n")
+        assert out == ("theorem foo.extracted_1", "∀ (n : ℕ), n = n")

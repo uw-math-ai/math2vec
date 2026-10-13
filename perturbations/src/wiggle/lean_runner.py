@@ -219,4 +219,14 @@ def extract_goal(tactic: str, type_str: str) -> tuple[str, str] | None:
     variant_type = block[colon + 1:].strip()
     if not variant_type:
         return None
+    # Anything the tactic left in the local context is printed as a binder
+    # before the colon; fold it back so the type stands on its own.
+    header = _THEOREM_HEADER_RE.match(variant_sig)
+    binders = variant_sig[header.end():].strip() if header else ""
+    if binders:
+        variant_type = f"∀ {binders}, {variant_type}"
     return variant_sig, variant_type
+
+
+# `theorem <name>` with an optional universe list, e.g. `foo.extracted_1.{u_1, u_2}`.
+_THEOREM_HEADER_RE = re.compile(r"theorem\s+[^\s({\[]+(?:(?<=\.)\{[^}]*\})?")

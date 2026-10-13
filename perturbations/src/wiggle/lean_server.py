@@ -197,9 +197,15 @@ class LeanLspServer:
         self._doc_version = 0
 
         self._spawn()
-        self._initialize(timeout=startup_timeout)
-        if warmup:
-            self._open_sticky_document(timeout=startup_timeout)
+        try:
+            self._initialize(timeout=startup_timeout)
+            if warmup:
+                self._open_sticky_document(timeout=startup_timeout)
+        except BaseException:
+            # The caller never receives this object, so nobody else can close
+            # the already-running Lean process.
+            self.close()
+            raise
 
     # ── lifecycle ──────────────────────────────────────────────────────────
 

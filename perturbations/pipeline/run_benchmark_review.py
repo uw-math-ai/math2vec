@@ -168,6 +168,9 @@ class LeanProbe:
         return any(c["ok"] for c in self.calls)
 
 
+_ORIGINAL_ORACLES: tuple[Any, Any, Any] | None = None
+
+
 def install_probes(probe: LeanProbe, *, use_lean: bool = True) -> None:
     """Wrap the oracle entry points of every transform module with ``probe``.
 
@@ -179,9 +182,16 @@ def install_probes(probe: LeanProbe, *, use_lean: bool = True) -> None:
     from wiggle import lean_runner
     from wiggle.transforms import connectives, logical, quantifiers, relations, structure
 
-    real_compile = lean_runner.compile_lean
-    real_extract = lean_runner.extract_goal
-    real_tc_compile = typeclass_mutate._compile_lean
+    # Called once per anchor: wrap the unpatched oracles, not the previous
+    # anchor's wrappers, or the wrappers nest without bound.
+    global _ORIGINAL_ORACLES
+    if _ORIGINAL_ORACLES is None:
+        _ORIGINAL_ORACLES = (
+            lean_runner.compile_lean,
+            lean_runner.extract_goal,
+            typeclass_mutate._compile_lean,
+        )
+    real_compile, real_extract, real_tc_compile = _ORIGINAL_ORACLES
 
     def probed_compile(sig: str, type_str: str) -> bool:
         ok = real_compile(sig, type_str) if use_lean else True

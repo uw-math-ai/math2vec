@@ -25,7 +25,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from wiggle.lean_runner import compile_lean
-from wiggle.propagation import compose_truth
 from wiggle.registry import ANCHOR_TRUTH, PERTURBATIONS, TRANSFORMS, TruthValue
 
 __all__ = ["apply_chain", "parse_extracted_lean", "normalize_statement"]
@@ -224,8 +223,7 @@ def apply_chain(
             current = {**theorem, "body": clean, "type_str": clean, "binders": ""}
 
         rules = _PROPAGATION[name]
-        step_out: TruthValue = rules[is_true_acc] if is_true_acc in rules else "unknown"
-        is_true_acc = compose_truth(is_true_acc, step_out)
+        is_true_acc = rules.get(is_true_acc, "unknown")
 
     return _record(
         perturbation_names,

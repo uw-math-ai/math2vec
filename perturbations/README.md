@@ -37,7 +37,7 @@ Previously: DALAB-May-2026-Lean-wiggle-wiggle
 │           └── bounds.py                #   flip_bound, bound_tighter
 │
 │       ├── parallel.py                  #   ProcessPoolExecutor + drain + time-budget
-│       ├── shards.py                    #   atomic JSONL shards + resume scan
+│       ├── shards.py                    #   append-only JSONL shards + per-anchor done markers
 │       ├── run_logging.py               #   per-worker JSONL logs + heartbeat
 │       └── lexical.py                   #   non-neural similarity: what word matching sees
 │
@@ -145,7 +145,7 @@ Key flags for [`pipeline/run_hf_corpus.py`](pipeline/run_hf_corpus.py):
 | Flag | Default | Purpose |
 |---|---|---|
 | `--num-workers N` | `SLURM_CPUS_PER_TASK` or `os.cpu_count()` | Parallel subprocess count. Each worker keeps its own Lean LSP server warm. |
-| `--shard-dir PATH` | `data/shards/<run-id>/` | Sharded JSONL output — one shard per worker, atomic-rewrite on flush. |
+| `--shard-dir PATH` | `data/shards/<run-id>/` | Sharded JSONL output — one shard per worker; an anchor counts as done only once all its records are flushed. |
 | `--log-dir PATH` | `logs/<run-id>/` | Per-worker JSONL logs + `heartbeat.jsonl`. |
 | `--time-budget DUR` | unlimited | Wallclock budget — accepts `23h`/`90m`/`3600s`. Workers in-flight finish their current anchor. |
 | `--run-id NAME` | timestamp | Resume by passing the same `--run-id` on resubmission. |

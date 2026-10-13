@@ -1,5 +1,5 @@
 """
-Tests for ``wiggle.shards`` — atomic-rewrite JSONL writer and resume scan.
+Tests for ``wiggle.shards`` — append-only JSONL writer, completion markers, resume scan.
 """
 
 from __future__ import annotations
@@ -8,13 +8,16 @@ import json
 from pathlib import Path
 from unittest import mock
 
-import pytest
-
 from wiggle.shards import ShardWriter, iter_shard_records, scan_completed_anchors
 
 
 def _read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def _write_anchor(w: ShardWriter, sig: str, **fields: object) -> None:
+    w.write({"anchor_signature": sig, **fields})
+    w.commit_anchor(sig)
 
 
 class TestShardWriter:
@@ -30,7 +33,7 @@ class TestShardWriter:
             {"anchor_signature": "b", "x": 2},
         ]
 
-    def test_flush_every_triggers_atomic_rewrite(self, tmp_path: Path) -> None:
+    def test_flush_every_triggers_flush(self, tmp_path: Path) -> None:
         w = ShardWriter(tmp_path, worker_id=0, flush_every=3)
         try:
             w.write({"anchor_signature": "a"})
@@ -70,44 +73,43 @@ class TestShardWriter:
         existing shard. The pre-existing records must NOT be lost on the
         next flush."""
         with ShardWriter(tmp_path, worker_id=5) as w:
-            w.write({"anchor_signature": "old1"})
-            w.write({"anchor_signature": "old2"})
+            _write_anchor(w, "old1")
+            _write_anchor(w, "old2")
 
         # Reopen and append.
         with ShardWriter(tmp_path, worker_id=5) as w:
-            w.write({"anchor_signature": "new1"})
+            _write_anchor(w, "new1")
 
         records = _read_jsonl(tmp_path / "part_00005.jsonl")
         sigs = [r["anchor_signature"] for r in records]
         assert sigs == ["old1", "old2", "new1"]
 
-    def test_atomic_rewrite_preserves_previous_state_on_simulated_crash(
-        self, tmp_path: Path
-    ) -> None:
-        """If os.replace is interrupted, the .tmp file is orphaned but the
-        previous .jsonl is intact. Simulate by killing the rename mid-flight."""
+    def test_flush_appends_without_rewriting(self, tmp_path: Path) -> None:
         w = ShardWriter(tmp_path, worker_id=0, flush_every=1)
         try:
-            w.write({"anchor_signature": "good"})
-            # First write flushed cleanly.
+            w.write({"anchor_signature": "a"})
+            with mock.patch("os.replace") as replace:
+                w.write({"anchor_signature": "b"})
+            replace.assert_not_called()
             assert _read_jsonl(tmp_path / "part_00000.jsonl") == [
-                {"anchor_signature": "good"}
-            ]
-
-            # Now simulate a crash during the second flush.
-            w._records.append({"anchor_signature": "lost"})
-            w._pending_since_flush = 1
-            with mock.patch("os.replace", side_effect=OSError("simulated crash")):
-                with pytest.raises(OSError):
-                    w.flush()
-
-            # The on-disk shard still has only "good".
-            assert _read_jsonl(tmp_path / "part_00000.jsonl") == [
-                {"anchor_signature": "good"}
+                {"anchor_signature": "a"},
+                {"anchor_signature": "b"},
             ]
         finally:
-            # Avoid letting close() retry with the mocked-out os.replace.
-            w._pending_since_flush = 0
+            w.close()
+
+    def test_reopening_drops_records_of_uncommitted_anchors(self, tmp_path: Path) -> None:
+        """A worker that died mid-anchor leaves partial records; the next
+        writer over the same shard removes them so the re-run can't duplicate."""
+        with ShardWriter(tmp_path, worker_id=0) as w:
+            _write_anchor(w, "done")
+            w.write({"anchor_signature": "partial", "i": 0})
+            w.flush()
+
+        with ShardWriter(tmp_path, worker_id=0) as w:
+            assert len(w) == 1
+        sigs = [r["anchor_signature"] for r in _read_jsonl(tmp_path / "part_00000.jsonl")]
+        assert sigs == ["done"]
 
 
 class TestScanCompletedAnchors:
@@ -121,13 +123,13 @@ class TestScanCompletedAnchors:
         for wid, sigs in [(0, ["a", "b"]), (1, ["c"]), (2, ["d", "e"])]:
             with ShardWriter(tmp_path, worker_id=wid) as w:
                 for s in sigs:
-                    w.write({"anchor_signature": s})
+                    _write_anchor(w, s)
 
         assert scan_completed_anchors(tmp_path) == {"a", "b", "c", "d", "e"}
 
     def test_orphaned_tmp_files_are_ignored(self, tmp_path: Path) -> None:
         with ShardWriter(tmp_path, worker_id=0) as w:
-            w.write({"anchor_signature": "real"})
+            _write_anchor(w, "real")
         # Drop an orphan .tmp containing different data.
         (tmp_path / "part_00099.jsonl.tmp").write_text(
             json.dumps({"anchor_signature": "orphan"}) + "\n", encoding="utf-8"
@@ -154,14 +156,40 @@ class TestScanCompletedAnchors:
         assert scan_completed_anchors(tmp_path) == {"kept"}
 
 
+    def test_uncommitted_anchor_is_not_complete(self, tmp_path: Path) -> None:
+        with ShardWriter(tmp_path, worker_id=0) as w:
+            _write_anchor(w, "finished")
+            w.write({"anchor_signature": "timed_out"})
+        assert scan_completed_anchors(tmp_path) == {"finished"}
+
+    def test_anchor_with_zero_records_is_complete(self, tmp_path: Path) -> None:
+        with ShardWriter(tmp_path, worker_id=0) as w:
+            w.commit_anchor("nothing_applied")
+        assert scan_completed_anchors(tmp_path) == {"nothing_applied"}
+
+    def test_legacy_shard_without_done_file_uses_record_signatures(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "part_00000.jsonl").write_text(
+            '{"anchor_signature": "old"}\n', encoding="utf-8"
+        )
+        assert scan_completed_anchors(tmp_path) == {"old"}
+
+
 class TestIterShardRecords:
     def test_streams_all_records_in_file_order(self, tmp_path: Path) -> None:
         with ShardWriter(tmp_path, worker_id=0) as w:
-            w.write({"anchor_signature": "a", "n": 1})
-            w.write({"anchor_signature": "b", "n": 2})
+            _write_anchor(w, "a", n=1)
+            _write_anchor(w, "b", n=2)
         with ShardWriter(tmp_path, worker_id=1) as w:
-            w.write({"anchor_signature": "c", "n": 3})
+            _write_anchor(w, "c", n=3)
 
         out = list(iter_shard_records(tmp_path))
         # Sorted by filename → shard 0 first, then shard 1.
         assert [r["n"] for r in out] == [1, 2, 3]
+
+    def test_skips_records_of_uncommitted_anchors(self, tmp_path: Path) -> None:
+        with ShardWriter(tmp_path, worker_id=0) as w:
+            _write_anchor(w, "a", n=1)
+            w.write({"anchor_signature": "partial", "n": 2})
+        assert [r["n"] for r in iter_shard_records(tmp_path)] == [1]

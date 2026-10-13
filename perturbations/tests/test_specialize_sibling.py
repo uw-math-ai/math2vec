@@ -83,3 +83,34 @@ if __name__ == "__main__":
             fn()
             print(f"  ✓ {name}")
     print("\nAll specialize/sibling tests passed.")
+
+
+def test_specialize_type_rejects_when_dropped_instance_is_missing() -> None:
+    # [Subsingleton α] (a b : α), a = b is true, but ∀ (a b : ℕ), a = b is
+    # false — the dropped instance has to be synthesizable at ℕ.
+    def fake_compile(type_str):
+        return "inferInstance : Subsingleton" not in type_str
+
+    with mock.patch.object(tm, "_compile_lean", side_effect=fake_compile):
+        out = tm.specialize_type(
+            "sig", "∀ {α : Type u_1} [inst : Subsingleton α] (a b : α), a = b"
+        )
+    assert out is None
+
+
+def test_specialize_type_checks_each_dropped_instance_at_concrete_type() -> None:
+    calls = []
+
+    def fake_compile(type_str):
+        calls.append(type_str)
+        return True
+
+    with mock.patch.object(tm, "_compile_lean", side_effect=fake_compile):
+        out = tm.specialize_type(
+            "sig", "∀ {α : Type u_1} [inst : AddCommMonoid α] (a b : α), a + b = b + a"
+        )
+    assert out == ("sig", "∀ (a b : ℕ), a + b = b + a")
+    assert calls == [
+        "(∀ (a b : ℕ), a + b = b + a) ∧ "
+        "((inferInstance : AddCommMonoid ℕ) = (inferInstance : AddCommMonoid ℕ))"
+    ]

@@ -27,9 +27,7 @@ def test_single_negate_flips_truth() -> None:
 
 
 def test_double_negate_recovers() -> None:
-    # The propagation table is the source of truth; the chain
-    # composition rule lives in compose_truth (used by apply_chain).
-    # is_true walks the table directly, which gives:
+    # The propagation table is the source of truth; is_true walks it:
     #   true --negate--> false --negate--> true
     assert is_true(["negate", "negate"]) == "true"
 
@@ -62,7 +60,7 @@ def test_mixed_chain() -> None:
     assert is_true(["tc_weaken_hyp", "negate"]) == "unknown"
 
 
-# ── compose_truth: pairwise combination used inside apply_chain ──────────────-
+# ── compose_truth: pairwise combination of independent labels ───────────────-
 
 def test_compose_truth_basic() -> None:
     assert compose_truth("true", "true") == "true"
@@ -92,3 +90,34 @@ if __name__ == "__main__":
             fn()
             print(f"  ✓ {name}")
     print("\nAll propagation tests passed.")
+
+
+# ── apply_chain: labels come from the per-step rules, same as is_true ─────────
+
+def _chain_truth(names: list[str]) -> str:
+    from unittest import mock
+
+    from wiggle import chains
+
+    def fake(_sig: str, type_str: str) -> tuple[str, str]:
+        return "sig", f"¬({type_str})"
+
+    with mock.patch.dict(chains.TRANSFORMS, {n: fake for n in names}):
+        record = chains.apply_chain(
+            {"id": "t", "body": "P", "type_str": "P"}, names
+        )
+    assert record["chain_status"] == "ok"
+    return record["is_true"]
+
+
+def test_apply_chain_double_negate_is_true() -> None:
+    assert _chain_truth(["negate", "negate"]) == "true"
+
+
+def test_apply_chain_false_then_equivalence_stays_false() -> None:
+    assert _chain_truth(["negate", "contrapose"]) == "false"
+
+
+def test_apply_chain_agrees_with_is_true() -> None:
+    for path in (["negate"], ["negate", "negate", "negate"], ["converse", "negate"]):
+        assert _chain_truth(path) == is_true(path)

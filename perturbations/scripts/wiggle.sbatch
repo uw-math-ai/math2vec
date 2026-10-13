@@ -101,8 +101,22 @@ python -u pipeline/run_hf_corpus.py \
     ${TIME_BUDGET_ARG[@]+"${TIME_BUDGET_ARG[@]}"} \
     ${EXTRA_ARGS} &
 PID=$!
-wait "$PID"
-EXIT_CODE=$?
+# A trapped signal interrupts `wait` with status >128 while Python is still
+# draining, so keep waiting until the child itself has exited.
+set +e
+while true; do
+    wait "$PID"
+    EXIT_CODE=$?
+    kill -0 "$PID" 2>/dev/null || break
+done
+if (( EXIT_CODE > 128 )); then
+    # The child may have exited right after the interrupted wait; collect its
+    # real status if bash still has it.
+    wait "$PID" 2>/dev/null
+    STATUS=$?
+    (( STATUS != 127 )) && EXIT_CODE=$STATUS
+fi
+set -e
 
 echo "──────────────────────────────────────────────────────────────────────"
 echo " Wiggle exited with $EXIT_CODE"

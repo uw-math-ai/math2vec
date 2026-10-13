@@ -127,6 +127,6 @@ tests/
 ├── test_inverse.py             # logical.inverse wrapper
 ├── test_quantifier_swap.py     # quantifiers.quantifier_swap wrapper
 ├── test_typeclass_mutate.py    # MANUAL: print-based smoke script (spawns Lean)
-├── test_shards.py              # ShardWriter atomicity + resume scan        (added in Phase 2)
+├── test_shards.py              # ShardWriter append + done markers + resume (added in Phase 2)
 └── test_parallel.py            # ProcessPoolExecutor orchestrator + drain   (added in Phase 2)
 ```

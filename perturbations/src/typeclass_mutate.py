@@ -574,7 +574,8 @@ def specialize_type(sig: str, type_str: str) -> tuple[str, str] | None:
 
     Drops the ``{α : Type*}`` binder and any instance binders ``[… α]`` that
     constrain it, substitutes ``α`` everywhere with the concrete type, and keeps
-    the first version that compiles. A true universal statement stays true under
+    the first version that compiles and for which Lean can synthesize every
+    dropped instance at the concrete type. A true universal statement stays true under
     instantiation at a valid type, so this is a true→true near-positive that is
     orthogonal to the typeclass-hierarchy mutations.
     """
@@ -599,11 +600,14 @@ def specialize_type(sig: str, type_str: str) -> tuple[str, str] | None:
         return None
 
     kept: list[str] = []
+    dropped_instances: list[str] = []
     for oc, inner, full in groups:
         if full == var_group_full:
             continue
         if oc == "[" and _subst_var(inner, var, "\x00") != inner:
-            continue  # instance constraint on the specialized variable
+            # Instance constraint on the specialized variable.
+            dropped_instances.append(_INSTANCE_NAME_RE.sub("", inner, count=1).strip())
+            continue
         kept.append(full)
 
     for concrete in _CONCRETE_TYPES:
@@ -612,9 +616,22 @@ def specialize_type(sig: str, type_str: str) -> tuple[str, str] | None:
         new_type = f"∀ {new_binders}, {new_body}" if new_binders else new_body
         if new_type.strip() == type_str.strip():
             continue
-        if _compile_lean(new_type):
+        # Dropping `[C α]` is only sound if `C <concrete>` actually has an
+        # instance; otherwise e.g. `[Subsingleton α] (a b : α), a = b` would
+        # become the false `∀ (a b : ℕ), a = b`. Elaborating
+        # `(inferInstance : C ℕ)` forces the synthesis, in the same Lean call.
+        checks = [new_type] + [
+            f"(inferInstance : {_subst_var(c, var, concrete)}) = "
+            f"(inferInstance : {_subst_var(c, var, concrete)})"
+            for c in dropped_instances
+        ]
+        if _compile_lean(" ∧ ".join(f"({c})" for c in checks) if dropped_instances else new_type):
             return sig, new_type
     return None
+
+
+# Leading `inst :` of a named instance binder.
+_INSTANCE_NAME_RE = re.compile(r"^\s*[^\s:()\[\]{}]+\s*:\s")
 
 
 def sibling_typeclass(sig: str, type_str: str, max_tries: int = 8) -> tuple[str, str] | None:
