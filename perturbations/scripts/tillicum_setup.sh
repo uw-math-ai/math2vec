@@ -10,6 +10,7 @@
 #     elan (Lean toolchain manager)   → $ELAN_HOME
 #     conda env with requirements.txt → $WIGGLE_ENV
 #     prebuilt Mathlib .olean cache   → <project>/.lake
+#     embedding model for MTEB eval   → $HF_HOME
 #
 # Compiling Wiggle.lean itself (`lake build Wiggle`) is left to the test job,
 # since login nodes are not for compute.
@@ -36,9 +37,9 @@ mkdir -p "$TILLICUM_BASE" "$XDG_CACHE_HOME" "$CONDA_PKGS_DIRS" "$(dirname "$WIGG
 
 # ── 1. elan ──────────────────────────────────────────────────────────────────
 if [[ -x "$ELAN_HOME/bin/elan" ]]; then
-    echo "[1/3] elan already installed: $("$ELAN_HOME/bin/elan" --version)"
+    echo "[1/4] elan already installed: $("$ELAN_HOME/bin/elan" --version)"
 else
-    echo "[1/3] installing elan into $ELAN_HOME"
+    echo "[1/4] installing elan into $ELAN_HOME"
     curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
         | sh -s -- -y --no-modify-path --default-toolchain none
 fi
@@ -51,9 +52,9 @@ fi
 module load conda
 eval "$(conda shell.bash hook)"
 if [[ -d "$WIGGLE_ENV" ]]; then
-    echo "[2/3] conda env exists: $WIGGLE_ENV"
+    echo "[2/4] conda env exists: $WIGGLE_ENV"
 else
-    echo "[2/3] creating conda env at $WIGGLE_ENV"
+    echo "[2/4] creating conda env at $WIGGLE_ENV"
     conda create -y --prefix "$WIGGLE_ENV" python=3.12
 fi
 conda activate "$WIGGLE_ENV"
@@ -63,10 +64,17 @@ pip install -r "$PROJECT_ROOT/requirements.txt"
 # ── 3. Mathlib ───────────────────────────────────────────────────────────────
 # Fetches Mathlib (git) plus its prebuilt .olean files so nothing has to be
 # compiled from source. Also installs the toolchain pinned in lean-toolchain.
-echo "[3/3] fetching Mathlib cache (first run: several GB, ~10 min)"
+echo "[3/4] fetching Mathlib cache (first run: several GB, ~10 min)"
 cd "$PROJECT_ROOT"
 lake exe cache get
+
+# ── 4. Embedding model ───────────────────────────────────────────────────────
+echo "[4/4] downloading $WIGGLE_EMBED_MODEL into $HF_HOME"
+mkdir -p "$HF_HOME" "$MTEB_CACHE"
+python -c "import sys; from sentence_transformers import SentenceTransformer; SentenceTransformer(sys.argv[1])" \
+    "$WIGGLE_EMBED_MODEL"
 
 echo
 echo "Setup done. Next, from $PROJECT_ROOT:"
 echo "    sbatch scripts/tillicum_tests.slurm"
+echo "    sbatch scripts/tillicum_blueprint.slurm"

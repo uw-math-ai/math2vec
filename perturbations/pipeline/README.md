@@ -11,6 +11,9 @@ corpus (curated theorems, HuggingFace dataset slice, etc.) and an output file.
 |---|---|
 | `run_demo.py` | Apply every perturbation in the registry to a curated set of 10 theorems. Outputs JSONL. |
 | `run_hf_corpus.py` | Pull anchors from a HuggingFace dataset (`FrenzyMath/mathlib_informal_v4.19.0`), run perturbation chains, and write JSONL. |
+| `prepare_blueprint_anchors.py` | Turn the leanblueprint scrape (`../dataset/blueprints.json`) into anchors for `run_benchmark_review.py --anchors-file`. |
+| `run_benchmark_review.py` | Apply every perturbation once (one layer) to each anchor; writes `results.jsonl` and an audit `review.md`. `--skip-noncompiling` drops anchors that don't elaborate against plain Mathlib; `--resume` continues an interrupted run. |
+| `mteb_perturbation_eval.py` | Score an embedding model on `results.jsonl` as an MTEB reranking task: rank each anchor's equivalent rewrites above its meaning-changing variants. |
 
 ## Usage
 

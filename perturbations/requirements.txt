@@ -6,3 +6,6 @@ pyarrow
 matplotlib
 scikit-learn
 pytest
+# Embedding evaluation (pipeline/mteb_perturbation_eval.py)
+mteb>=2.26
+sentence-transformers

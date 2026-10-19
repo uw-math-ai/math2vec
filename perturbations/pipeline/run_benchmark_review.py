@@ -310,8 +310,32 @@ def token_diff(before: str, after: str, max_edits: int = 6) -> str:
 # ── Per-anchor worker ─────────────────────────────────────────────────────────
 
 
-def process_anchor(anchor: dict[str, Any], use_lean: bool) -> dict[str, Any]:
-    """Apply every registered perturbation once to a single anchor."""
+def anchor_elaborates_closed(type_str: str) -> bool:
+    """True iff ``type_str`` elaborates against Mathlib with no auto-bound names.
+
+    Plain ``compile_lean`` runs with Lean's default ``autoImplicit``, which
+    silently turns unknown identifiers (a project's section ``variable``s, a
+    definition Mathlib lacks) into implicit arguments, so it accepts
+    statements that don't mean what their source meant.
+    """
+    from wiggle.lean_runner import run_lean
+
+    output = run_lean(
+        "import Mathlib\n\nset_option autoImplicit false in\n"
+        f"example : {type_str} := by sorry\n"
+    )
+    return re.search(r"\berror[:(]", output) is None
+
+
+def process_anchor(
+    anchor: dict[str, Any], use_lean: bool, skip_noncompiling: bool = False
+) -> dict[str, Any]:
+    """Apply every registered perturbation once to a single anchor.
+
+    With ``skip_noncompiling`` the anchor must first pass
+    :func:`anchor_elaborates_closed`; anchors that don't are returned with no
+    results and ``skipped=True``.
+    """
     from wiggle.chains import normalize_statement
     from wiggle.lean_runner import compile_lean
     from wiggle.registry import ANCHOR_TRUTH, PERTURBATIONS
@@ -324,7 +348,19 @@ def process_anchor(anchor: dict[str, Any], use_lean: bool) -> dict[str, Any]:
 
     anchor_compiles: bool | None = None
     if use_lean:
-        anchor_compiles = compile_lean("", type_str)
+        if skip_noncompiling:
+            anchor_compiles = anchor_elaborates_closed(type_str)
+            if not anchor_compiles:
+                return {
+                    **anchor,
+                    "anchor_compiles": False,
+                    "skipped": True,
+                    "results": [],
+                    "total_seconds": round(time.time() - started, 1),
+                    "total_lean_calls": 1,
+                }
+        else:
+            anchor_compiles = compile_lean("", type_str)
 
     results: list[dict[str, Any]] = []
     for pert in PERTURBATIONS:
@@ -428,7 +464,11 @@ def render_report(anchors: list[dict[str, Any]], use_lean: bool) -> str:
     total_variants = sum(
         1 for a in anchors for r in a["results"] if r["status"] == STATUS_APPLIED
     )
-    add(f"**{total_variants} variants produced** from {len(anchors)} anchors.")
+    n_skipped = sum(1 for a in anchors if a.get("skipped"))
+    add(f"**{total_variants} variants produced** from {len(anchors) - n_skipped} anchors.")
+    if n_skipped:
+        add(f"{n_skipped} further anchors did not elaborate against Mathlib "
+            "(with `autoImplicit false`) and were skipped; they are not listed below.")
     add("")
     add("---")
     add("")
@@ -436,7 +476,7 @@ def render_report(anchors: list[dict[str, Any]], use_lean: bool) -> str:
     # ── Per-anchor detail ─────────────────────────────────────────────────────
     add("## Anchors")
     add("")
-    for idx, a in enumerate(anchors, 1):
+    for idx, a in enumerate((a for a in anchors if not a.get("skipped")), 1):
         add(f"### {idx}. `{a['declaration']}`")
         add("")
         add(f"- **Module** — `{a['module']}`")
@@ -581,6 +621,19 @@ def main() -> int:
         help="Skip every Lean call. Only the regex-only transforms can produce "
         "anything; useful as a fast smoke test of the CSV plumbing.",
     )
+    ap.add_argument(
+        "--skip-noncompiling",
+        action="store_true",
+        help="Only perturb anchors that elaborate against plain Mathlib with "
+        "autoImplicit off; others are recorded as skipped. For corpora (e.g. "
+        "blueprints) whose statements may depend on project-only definitions.",
+    )
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip anchors already recorded in <out>/anchors.jsonl from an "
+        "earlier, interrupted run.",
+    )
     args = ap.parse_args()
 
     if args.anchors_file:
@@ -603,42 +656,66 @@ def main() -> int:
         f"Lean {'on' if use_lean else 'off'}, {args.num_workers} worker(s)",
         flush=True,
     )
-    for a in anchors:
-        tag = " [definition]" if a["is_definition"] else ""
-        print(f"  {a['id']}  {a['declaration']}{tag}", flush=True)
-    print(flush=True)
+    if len(anchors) <= 100:
+        for a in anchors:
+            tag = " [definition]" if a["is_definition"] else ""
+            print(f"  {a['id']}  {a['declaration']}{tag}", flush=True)
+        print(flush=True)
+
+    # Every finished anchor is appended here at once, so an interrupted run
+    # loses only the anchors still in flight and can pick up with --resume.
+    args.out.mkdir(parents=True, exist_ok=True)
+    anchors_path = args.out / "anchors.jsonl"
+    processed: list[dict[str, Any]] = []
+    if args.resume and anchors_path.exists():
+        wanted = {a["id"] for a in anchors}
+        for line in anchors_path.read_text(encoding="utf-8").splitlines():
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # truncated last line from a kill mid-write
+            if rec.get("id") in wanted:
+                processed.append(rec)
+        done_ids = {a["id"] for a in processed}
+        print(f"resuming: {len(done_ids)} anchors already done", flush=True)
+        todo = [a for a in anchors if a["id"] not in done_ids]
+    else:
+        anchors_path.write_text("", encoding="utf-8")
+        todo = anchors
 
     started = time.time()
-    processed: list[dict[str, Any]] = []
-    workers = max(1, min(args.num_workers, len(anchors)))
+    workers = max(1, min(args.num_workers, len(todo) or 1))
 
-    if workers == 1:
-        for a in anchors:
-            processed.append(process_anchor(a, use_lean))
+    with anchors_path.open("a", encoding="utf-8") as anchors_fh:
+
+        def record(res: dict[str, Any]) -> None:
+            processed.append(res)
+            anchors_fh.write(json.dumps(res, ensure_ascii=False) + "\n")
+            anchors_fh.flush()
+            n_ok = sum(1 for r in res["results"] if r["status"] == STATUS_APPLIED)
+            outcome = "skipped (does not elaborate)" if res.get("skipped") else f"{n_ok} variants"
             print(
-                f"  done {processed[-1]['id']} "
-                f"({processed[-1]['total_seconds']}s, "
-                f"{processed[-1]['total_lean_calls']} lean calls)",
+                f"  [{len(processed)}/{len(anchors)}] {res['id']} "
+                f"{res['declaration']}: {outcome}, "
+                f"{res['total_seconds']}s, {res['total_lean_calls']} lean calls",
                 flush=True,
             )
-    else:
-        with ProcessPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(process_anchor, a, use_lean): a for a in anchors}
-            for fut in as_completed(futures):
-                res = fut.result()
-                processed.append(res)
-                n_ok = sum(1 for r in res["results"] if r["status"] == STATUS_APPLIED)
-                print(
-                    f"  [{len(processed)}/{len(anchors)}] {res['id']} "
-                    f"{res['declaration']}: {n_ok} variants, "
-                    f"{res['total_seconds']}s, {res['total_lean_calls']} lean calls",
-                    flush=True,
-                )
+
+        if workers == 1:
+            for a in todo:
+                record(process_anchor(a, use_lean, args.skip_noncompiling))
+        else:
+            with ProcessPoolExecutor(max_workers=workers) as pool:
+                futures = [
+                    pool.submit(process_anchor, a, use_lean, args.skip_noncompiling)
+                    for a in todo
+                ]
+                for fut in as_completed(futures):
+                    record(fut.result())
 
     order = {a["id"]: i for i, a in enumerate(anchors)}
     processed.sort(key=lambda a: order[a["id"]])
 
-    args.out.mkdir(parents=True, exist_ok=True)
     jsonl_path = args.out / "results.jsonl"
     with open(jsonl_path, "w", encoding="utf-8") as fh:
         for a in processed:

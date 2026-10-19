@@ -124,6 +124,46 @@ cd /gpfs/projects/mathai/$USER/math2vec/perturbations
 WIGGLE_TEST_STAGES="build live" bash scripts/tillicum_tests.slurm
 ```
 
+## 4. Blueprint perturbations + MTEB embedding eval
+
+`scripts/tillicum_blueprint.slurm` runs the whole leanblueprint experiment in
+one job:
+
+1. It converts the 4,378 scraped declarations in `../dataset/blueprints.json`
+   into about 2,800 unique theorem/lemma statements.
+2. It keeps the ones that elaborate against plain Mathlib with
+   `autoImplicit false`. Many blueprint statements use project-only
+   definitions and are skipped.
+3. It applies each of the 28 perturbations once to every kept statement.
+4. It scores `sentence-transformers/all-MiniLM-L6-v2` on the result as an
+   MTEB reranking task.
+
+```bash
+cd /gpfs/projects/mathai/$USER/math2vec && git pull
+cd perturbations
+bash scripts/tillicum_setup.sh          # login node; installs mteb + downloads the model
+sbatch scripts/tillicum_blueprint.slurm # 4 GPUs → 32 Lean workers, ≤12 h
+```
+
+For a cheap trial first, run
+`WIGGLE_BP_LIMIT=40 sbatch --qos=debug --gpus=1 --cpus-per-task=8 --mem=180G --time=00:30:00 scripts/tillicum_blueprint.slurm`.
+Delete `data/blueprint-review` before the full run, or keep it and the full
+run will resume from it.
+
+The results land in `data/blueprint-review/`:
+
+- `review.md` is the human audit.
+- `results.jsonl` has one row per anchor × perturbation.
+- `anchors.jsonl` is the resume log.
+- `mteb/mteb_scores.json` has nDCG@10, MAP and MRR.
+- `mteb/similarity_by_perturbation.csv` gives the mean anchor–variant cosine
+  per perturbation.
+
+If the job hits its time limit, submit it again: finished anchors are not
+redone. Use a different model with `WIGGLE_EMBED_MODEL=<hf id>`, but run
+`tillicum_setup.sh` with the same variable first so the model gets
+downloaded.
+
 ## Troubleshooting
 
 | Symptom | Fix |

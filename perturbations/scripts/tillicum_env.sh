@@ -20,6 +20,12 @@ export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$TILLICUM_BASE/cache}"
 export MATHLIB_CACHE_DIR="${MATHLIB_CACHE_DIR:-$XDG_CACHE_HOME/mathlib}"
 export CONDA_PKGS_DIRS="${CONDA_PKGS_DIRS:-$TILLICUM_BASE/conda/pkgs}"
 export PIP_CACHE_DIR="${PIP_CACHE_DIR:-$XDG_CACHE_HOME/pip}"
+# Embedding models for the MTEB eval; tillicum_setup.sh pre-downloads them so
+# compute jobs never need the internet.
+export HF_HOME="${HF_HOME:-$XDG_CACHE_HOME/huggingface}"
+export MTEB_CACHE="${MTEB_CACHE:-$XDG_CACHE_HOME/mteb}"
+: "${WIGGLE_EMBED_MODEL:=sentence-transformers/all-MiniLM-L6-v2}"
+export WIGGLE_EMBED_MODEL
 
 # Packages in ~/.local shadow the env's own and have broken the pytest
 # plugins before.
