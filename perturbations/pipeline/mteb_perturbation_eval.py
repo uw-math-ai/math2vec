@@ -1,4 +1,4 @@
-"""Score an embedding model on perturbation results as an MTEB reranking task.
+"""Score embedding models on perturbation results as an MTEB reranking task.
 
 Each anchor whose perturbations produced both kinds of variant becomes one
 query. Its candidate list is that anchor's own applied variants: the
@@ -12,11 +12,19 @@ Usage::
 
     python pipeline/mteb_perturbation_eval.py \\
         --results data/blueprint-review/results.jsonl \\
-        --out data/blueprint-review/mteb
+        --out data/blueprint-review/mteb \\
+        --models Qwen/Qwen3-Embedding-8B sentence-transformers/all-MiniLM-L6-v2
 
-Writes ``<out>/mteb_scores.json`` (nDCG@10, MAP, MRR, … as computed by
-``mteb``), ``<out>/similarity_by_perturbation.csv`` (mean anchor–variant cosine
-per perturbation) and ``<out>/task_stats.json``.
+Writes ``<out>/task_stats.json`` and, per model, ``<out>/<model>/``:
+
+* ``mteb_scores.json`` — nDCG@10, MAP, MRR, … as computed by ``mteb``
+* ``variant_cosines.csv`` — cosine(anchor, variant) for every applied variant
+* ``similarity_by_perturbation.csv`` — the same, averaged per perturbation
+* ``pairwise_by_negative.csv`` — how often an equivalent rewrite scores above
+  a hard negative, split by the negative's semantic class
+
+A model that fails (e.g. out of memory) is recorded in ``<out>/errors.json``
+and the rest still run.
 """
 
 from __future__ import annotations
@@ -25,6 +33,7 @@ import argparse
 import csv
 import json
 import sys
+import traceback
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -34,8 +43,17 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from wiggle.registry import SEMANTIC_CLASSES  # noqa: E402
 
-DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_MODELS = ["Qwen/Qwen3-Embedding-8B", "sentence-transformers/all-MiniLM-L6-v2"]
 TASK_NAME = "WigglePerturbationReranking"
+QUERY_INSTRUCTION = (
+    "Given a Lean 4 theorem statement, retrieve statements that are "
+    "mathematically equivalent to it"
+)
+REPORTED_SCORES = ("ndcg_at_10", "map_at_1000", "mrr_at_10", "precision_at_1")
+
+
+def model_slug(name: str) -> str:
+    return name.replace("/", "__")
 
 
 def load_rows(path: Path) -> list[dict[str, Any]]:
@@ -134,6 +152,7 @@ def make_task(data: dict[str, Any]):
             dialect=[],
             sample_creation="created",
             bibtex_citation="",
+            prompt={"query": QUERY_INSTRUCTION},
         )
 
         def load_data(self, num_proc: int | None = None, **kwargs: Any) -> None:
@@ -150,29 +169,133 @@ def make_task(data: dict[str, Any]):
     return WigglePerturbationReranking()
 
 
-def similarity_table(rows: list[dict[str, Any]], model_name: str) -> list[dict[str, Any]]:
-    """Mean cosine(anchor, variant) per perturbation over all applied variants."""
-    import numpy as np
+def load_model(name: str):
+    """``mteb`` model for ``name``; models over 1B parameters load in bf16 on GPU."""
+    import mteb
+    import torch
+
+    kwargs: dict[str, Any] = {}
+    meta = mteb.get_model_meta(name)
+    if torch.cuda.is_available() and (meta.n_parameters or 0) > 1_000_000_000:
+        kwargs["model_kwargs"] = {"dtype": torch.bfloat16}
+    return mteb.get_model(name, **kwargs)
+
+
+def sentence_transformer_of(model: Any, name: str):
+    """The SentenceTransformer inside an ``mteb`` wrapper, or a fresh one."""
     from sentence_transformers import SentenceTransformer
 
-    pairs = [(r["original_type_str"], r["variant"], r["perturbation"])
-             for r in rows if r.get("status") == "applied" and r.get("variant")]
+    inner = getattr(model, "model", None)
+    if isinstance(inner, SentenceTransformer):
+        return inner
+    return SentenceTransformer(name)
+
+
+def variant_cosines(rows: list[dict[str, Any]], st_model: Any, batch_size: int) -> list[dict[str, Any]]:
+    """cosine(anchor, variant) for every applied variant, no instruction prompt."""
+    import numpy as np
+
+    pairs = [r for r in rows if r.get("status") == "applied" and r.get("variant")]
     if not pairs:
         return []
-    model = SentenceTransformer(model_name)
-    texts = sorted({t for a, v, _ in pairs for t in (a, v)})
+    texts = sorted({t for r in pairs for t in (r["original_type_str"], r["variant"])})
     index = {t: i for i, t in enumerate(texts)}
-    emb = model.encode(texts, batch_size=256, normalize_embeddings=True,
-                       show_progress_bar=False)
-    sims = defaultdict(list)
-    for a, v, p in pairs:
-        sims[p].append(float(np.dot(emb[index[a]], emb[index[v]])))
+    emb = st_model.encode(texts, batch_size=batch_size, normalize_embeddings=True,
+                          show_progress_bar=False, convert_to_numpy=True)
+    emb = np.asarray(emb, dtype=np.float32)
+    return [
+        {"source_id": r["source_id"], "perturbation": r["perturbation"],
+         "class": SEMANTIC_CLASSES.get(r["perturbation"], "graded"),
+         "cosine": round(float(np.dot(emb[index[r["original_type_str"]]],
+                                      emb[index[r["variant"]]])), 5)}
+        for r in pairs
+    ]
+
+
+def summarize_by_perturbation(cos_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by: dict[str, list[float]] = defaultdict(list)
+    for r in cos_rows:
+        by[r["perturbation"]].append(r["cosine"])
     return sorted(
         ({"perturbation": p, "class": SEMANTIC_CLASSES.get(p, "graded"), "n": len(s),
           "mean_cosine": round(sum(s) / len(s), 4), "min_cosine": round(min(s), 4)}
-         for p, s in sims.items()),
+         for p, s in by.items()),
         key=lambda d: d["mean_cosine"],
     )
+
+
+def pairwise_by_negative(cos_rows: list[dict[str, Any]], data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Fraction of (equivalent, hard negative) pairs where the equivalent is closer.
+
+    Only pairs within the same MTEB query count, split by the negative's class.
+    Ties count half.
+    """
+    cos = {(r["source_id"], r["perturbation"]): r["cosine"] for r in cos_rows}
+    wins: dict[str, float] = defaultdict(float)
+    total: dict[str, int] = defaultdict(int)
+    for qid, qrels in data["relevant_docs"].items():
+        pos = [cos.get((qid, d.split("::", 1)[1])) for d, lab in qrels.items() if lab]
+        for did, lab in qrels.items():
+            if lab:
+                continue
+            neg = cos.get((qid, did.split("::", 1)[1]))
+            cls = data["doc_info"][did]["class"]
+            for p in pos:
+                if p is None or neg is None:
+                    continue
+                total[cls] += 1
+                wins[cls] += 1.0 if p > neg else 0.5 if p == neg else 0.0
+    out = [{"negative_class": c, "pairs": total[c],
+            "equivalent_ranked_higher": round(wins[c] / total[c], 4)} for c in sorted(total)]
+    all_pairs = sum(total.values())
+    if all_pairs:
+        out.append({"negative_class": "all", "pairs": all_pairs,
+                    "equivalent_ranked_higher": round(sum(wins.values()) / all_pairs, 4)})
+    return out
+
+
+def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        if rows:
+            w = csv.DictWriter(fh, fieldnames=list(rows[0]))
+            w.writeheader()
+            w.writerows(rows)
+
+
+def evaluate_model(name: str, rows: list[dict[str, Any]], data: dict[str, Any],
+                   out: Path, batch_size: int) -> None:
+    import mteb
+    import torch
+
+    out.mkdir(parents=True, exist_ok=True)
+    device = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu"
+    print(f"\n── {name} on {device}", flush=True)
+
+    model = load_model(name)
+    result = mteb.evaluate(
+        model, make_task(data), cache=None,
+        encode_kwargs={"batch_size": batch_size}, show_progress_bar=False,
+    )
+    scores = result.task_results[0].scores
+    (out / "mteb_scores.json").write_text(json.dumps(
+        {"model": name, "task": TASK_NAME, "device": device, "scores": scores},
+        indent=2, default=str) + "\n")
+    test = scores["test"][0]
+    print("   " + ", ".join(f"{k}={test[k]:.4f}" for k in REPORTED_SCORES if k in test),
+          flush=True)
+
+    cos_rows = variant_cosines(rows, sentence_transformer_of(model, name), batch_size)
+    write_csv(out / "variant_cosines.csv", cos_rows)
+    write_csv(out / "similarity_by_perturbation.csv", summarize_by_perturbation(cos_rows))
+    pairwise = pairwise_by_negative(cos_rows, data)
+    write_csv(out / "pairwise_by_negative.csv", pairwise)
+    for p in pairwise:
+        print(f"   equivalent > {p['negative_class']}: {p['equivalent_ranked_higher']:.3f} "
+              f"({p['pairs']} pairs)", flush=True)
+
+    del model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def main() -> int:
@@ -180,12 +303,10 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--results", type=Path, required=True,
                     help="results.jsonl from run_benchmark_review.py")
-    ap.add_argument("--model", default=DEFAULT_MODEL)
+    ap.add_argument("--models", nargs="+", default=DEFAULT_MODELS)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--batch-size", type=int, default=128)
+    ap.add_argument("--batch-size", type=int, default=64)
     args = ap.parse_args()
-
-    import mteb
 
     rows = load_rows(args.results)
     data = build_rerank_data(rows)
@@ -196,30 +317,16 @@ def main() -> int:
         print("No anchor has both an equivalent and a non-equivalent variant.", file=sys.stderr)
         return 1
 
-    result = mteb.evaluate(
-        mteb.get_model(args.model),
-        make_task(data),
-        cache=None,
-        encode_kwargs={"batch_size": args.batch_size},
-        show_progress_bar=False,
-    )
-    scores = result.task_results[0].scores
-    (args.out / "mteb_scores.json").write_text(
-        json.dumps({"model": args.model, "task": TASK_NAME, "scores": scores},
-                   indent=2, default=str) + "\n"
-    )
-    test = scores["test"][0]
-    print(f"{args.model}: " + ", ".join(
-        f"{k}={test[k]:.4f}" for k in ("ndcg_at_10", "map_at_1000", "mrr_at_10")
-        if k in test), flush=True)
-
-    table = similarity_table(rows, args.model)
-    with open(args.out / "similarity_by_perturbation.csv", "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=["perturbation", "class", "n", "mean_cosine", "min_cosine"])
-        w.writeheader()
-        w.writerows(table)
-    print(f"wrote {args.out}", flush=True)
-    return 0
+    errors = {}
+    for name in args.models:
+        try:
+            evaluate_model(name, rows, data, args.out / model_slug(name), args.batch_size)
+        except Exception:  # one bad model shouldn't cost the others
+            errors[name] = traceback.format_exc()
+            print(f"   FAILED:\n{errors[name]}", file=sys.stderr, flush=True)
+    (args.out / "errors.json").write_text(json.dumps(errors, indent=2) + "\n")
+    print(f"\nwrote {args.out}", flush=True)
+    return 1 if len(errors) == len(args.models) else 0
 
 
 if __name__ == "__main__":

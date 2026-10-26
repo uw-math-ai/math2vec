@@ -13,7 +13,8 @@ corpus (curated theorems, HuggingFace dataset slice, etc.) and an output file.
 | `run_hf_corpus.py` | Pull anchors from a HuggingFace dataset (`FrenzyMath/mathlib_informal_v4.19.0`), run perturbation chains, and write JSONL. |
 | `prepare_blueprint_anchors.py` | Turn the leanblueprint scrape (`../dataset/blueprints.json`) into anchors for `run_benchmark_review.py --anchors-file`. |
 | `run_benchmark_review.py` | Apply every perturbation once (one layer) to each anchor; writes `results.jsonl` and an audit `review.md`. `--skip-noncompiling` drops anchors that don't elaborate against plain Mathlib; `--resume` continues an interrupted run. |
-| `mteb_perturbation_eval.py` | Score an embedding model on `results.jsonl` as an MTEB reranking task: rank each anchor's equivalent rewrites above its meaning-changing variants. |
+| `mteb_perturbation_eval.py` | Score embedding models (default Qwen3-Embedding-8B and MiniLM) on `results.jsonl` as an MTEB reranking task: rank each anchor's equivalent rewrites above its meaning-changing variants. |
+| `plot_eval.py` | Draw the diagrams and `summary.md` for a run directory. |
 
 ## Usage
 

@@ -29,7 +29,7 @@ import os
 import re
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -634,6 +634,19 @@ def main() -> int:
         help="Skip anchors already recorded in <out>/anchors.jsonl from an "
         "earlier, interrupted run.",
     )
+    ap.add_argument(
+        "--deadline-epoch",
+        type=float,
+        help="Unix time after which no new anchors are started; the outputs "
+        "are still written, and --resume picks up the rest later.",
+    )
+    ap.add_argument(
+        "--deadline-grace",
+        type=float,
+        default=600,
+        help="Seconds to let in-flight anchors finish after the deadline "
+        "before abandoning them (default 600).",
+    )
     args = ap.parse_args()
 
     if args.anchors_file:
@@ -701,17 +714,45 @@ def main() -> int:
                 flush=True,
             )
 
+        deadline = args.deadline_epoch
         if workers == 1:
-            for a in todo:
+            for i, a in enumerate(todo):
+                if deadline is not None and time.time() >= deadline:
+                    print(f"deadline reached: {len(todo) - i} anchors left for --resume",
+                          flush=True)
+                    break
                 record(process_anchor(a, use_lean, args.skip_noncompiling))
         else:
-            with ProcessPoolExecutor(max_workers=workers) as pool:
-                futures = [
-                    pool.submit(process_anchor, a, use_lean, args.skip_noncompiling)
-                    for a in todo
-                ]
-                for fut in as_completed(futures):
+            pool = ProcessPoolExecutor(max_workers=workers)
+            pending = {
+                pool.submit(process_anchor, a, use_lean, args.skip_noncompiling)
+                for a in todo
+            }
+            while pending:
+                timeout = None if deadline is None else max(0.0, deadline - time.time())
+                done, pending = wait(pending, timeout=timeout, return_when=FIRST_COMPLETED)
+                for fut in done:
                     record(fut.result())
+                if deadline is not None and time.time() >= deadline and pending:
+                    for fut in pending:
+                        fut.cancel()
+                    running = {f for f in pending if not f.cancelled()}
+                    print(
+                        f"deadline reached: {len(pending) - len(running)} anchors left "
+                        f"for --resume; waiting up to {args.deadline_grace}s for "
+                        f"{len(running)} in flight",
+                        flush=True,
+                    )
+                    done, running = wait(running, timeout=args.deadline_grace)
+                    for fut in done:
+                        if not fut.exception():
+                            record(fut.result())
+                    if running:
+                        print(f"abandoning {len(running)} in-flight anchors", flush=True)
+                        for proc in list(getattr(pool, "_processes", {}).values()):
+                            proc.terminate()
+                    break
+            pool.shutdown(wait=False, cancel_futures=True)
 
     order = {a["id"]: i for i, a in enumerate(anchors)}
     processed.sort(key=lambda a: order[a["id"]])

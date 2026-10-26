@@ -153,3 +153,50 @@ def test_rerank_data_positives_are_equivalent_variants_only() -> None:
     assert sorted(data["top_ranked"]["a"]) == sorted(data["relevant_docs"]["a"])
     s = data["stats"]
     assert (s["ambiguous_variants"], s["skipped_no_positive"], s["skipped_no_negative"]) == (1, 1, 1)
+
+
+def test_pairwise_counts_equivalent_beating_each_negative_class() -> None:
+    mteb_eval = _load("mteb_perturbation_eval")
+    data = {
+        "relevant_docs": {"a": {"a::alpha_rename": 1, "a::negate": 0, "a::eq_to_le": 0}},
+        "doc_info": {"a::negate": {"class": "contradictory"}, "a::eq_to_le": {"class": "graded"}},
+    }
+    cos = [
+        {"source_id": "a", "perturbation": "alpha_rename", "cosine": 0.9},
+        {"source_id": "a", "perturbation": "negate", "cosine": 0.8},
+        {"source_id": "a", "perturbation": "eq_to_le", "cosine": 0.95},
+    ]
+    table = {r["negative_class"]: r["equivalent_ranked_higher"]
+             for r in mteb_eval.pairwise_by_negative(cos, data)}
+    assert table == {"contradictory": 1.0, "graded": 0.0, "all": 0.5}
+
+
+def test_plot_eval_writes_figures_from_a_run_dir(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    model_dir = run / "mteb" / "org__model"
+    model_dir.mkdir(parents=True)
+    (run / "blueprint_anchors.stats.json").write_text(json.dumps({"declarations": 10, "anchors": 6}))
+    (run / "anchors.jsonl").write_text(
+        json.dumps({"id": "a", "skipped": False}) + "\n" + json.dumps({"id": "b", "skipped": True}) + "\n")
+    (run / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
+        {"source_id": "a", "perturbation": "negate", "status": "applied"},
+        {"source_id": "a", "perturbation": "curry", "status": "tactic_failed"},
+    ]))
+    (run / "mteb" / "task_stats.json").write_text(json.dumps({"queries": 1, "positives": 1, "negatives": 1}))
+    (model_dir / "mteb_scores.json").write_text(json.dumps(
+        {"model": "org/model", "scores": {"test": [{"ndcg_at_10": 0.5, "map_at_1000": 0.4}]}}))
+    (model_dir / "variant_cosines.csv").write_text(
+        "source_id,perturbation,class,cosine\na,negate,contradictory,0.9\na,alpha_rename,equivalent,0.95\n")
+    (model_dir / "similarity_by_perturbation.csv").write_text(
+        "perturbation,class,n,mean_cosine,min_cosine\nnegate,contradictory,1,0.9,0.9\n")
+    (model_dir / "pairwise_by_negative.csv").write_text(
+        "negative_class,pairs,equivalent_ranked_higher\ncontradictory,1,1.0\nall,1,1.0\n")
+
+    subprocess.run([sys.executable, str(_PIPELINE / "plot_eval.py"), "--run", str(run)],
+                   check=True, capture_output=True, text=True)
+    figs = run / "figures"
+    assert {p.name for p in figs.glob("*.png")} == {
+        "funnel.png", "perturbation_outcomes.png", "mteb_scores.png",
+        "pairwise_by_negative.png", "cosine_by_class.png", "cosine_by_perturbation.png",
+    }
+    assert "| org/model | 0.5000 | 0.4000 |" in (figs / "summary.md").read_text()

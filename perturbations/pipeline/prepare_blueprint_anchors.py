@@ -230,6 +230,7 @@ def main(argv: list[str] | None = None) -> int:
     with args.out.open("w", encoding="utf-8") as f:
         for a in anchors:
             f.write(json.dumps(a, ensure_ascii=False) + "\n")
+    args.out.with_suffix(".stats.json").write_text(json.dumps(dict(stats), indent=2) + "\n")
 
     print(
         f"{stats['declarations']} declarations → {stats['anchors']} anchors "
