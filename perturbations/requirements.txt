@@ -1,0 +1,14 @@
+# Python dependencies for the Wiggle library, pipeline runners, and tests.
+# Lean + Mathlib are managed separately by elan / lake (see lean-toolchain).
+numpy
+pandas
+pyarrow
+matplotlib
+scikit-learn
+pytest
+# Embedding evaluation (pipeline/mteb_perturbation_eval.py). torch itself is
+# installed by scripts/tillicum_setup.sh from a CUDA-specific index.
+mteb>=2.26
+sentence-transformers>=3.0
+transformers>=4.51  # first release with Qwen3
+huggingface_hub
