@@ -93,28 +93,75 @@ macro "negate_state" : tactic => `(tactic|
   )
 )
 
+-- Introduces every leading binder of the goal, keeping the names the statement
+-- gave them. Anchors arrive as closed `∀ (x : ℝ) (hx : 1 < x), P x`, so without
+-- this the context is empty, `revert_props` has nothing to revert, and the
+-- goal `contrapose` sees is a `∀` over a type rather than an implication.
+open Lean Meta Elab Tactic in
+elab "intro_binders" : tactic => do
+  let goal ← getMainGoal
+  let n := getIntrosSize (← instantiateMVars (← goal.getType))
+  let (_, goal) ← goal.introNP n
+  replaceMainGoal [goal]
+
+-- A hypothesis of the statement, as opposed to a type variable, a term, or an
+-- instance argument like `[FiniteDimensional ℝ M]` (a Prop, but structure the
+-- statement is set in rather than a premise of it).
+open Lean Meta in
+def isPremise (d : LocalDecl) : MetaM Bool := do
+  if d.isImplementationDetail || d.binderInfo.isInstImplicit then return false
+  isProp d.type
+
 -- Reverts only Prop-typed hypotheses, leaving type variables in context.
 -- This lets contrapose! see a plain implication instead of a dependent ∀.
 open Lean Meta Elab Tactic in
-elab "revert_props" : tactic => do
+elab "revert_props" : tactic => withMainContext do
   let goal ← getMainGoal
   let decl ← goal.getDecl
   let propFVars ← decl.lctx.foldlM (init := #[]) fun acc d => do
-    if d.isImplementationDetail then return acc
-    if ← isProp d.type then return acc.push d.fvarId
+    if ← isPremise d then return acc.push d.fvarId
     else return acc
   let (_, newGoal) ← goal.revert propFVars (preserveOrder := true)
   replaceMainGoal [newGoal]
+
+-- Replaces the premises in context with one conjunction: `h₁ : P₁, …, hₙ : Pₙ ⊢ G`
+-- becomes `⊢ P₁ ∧ … ∧ Pₙ → G`. Unlike `revert_props; simp only [← and_imp]` it
+-- never folds a negated conclusion `¬Q`, i.e. `Q → False`, into the premises.
+-- Fails when there is no premise, or when a premise is used later on (the
+-- conclusion or a later binder mentions its proof).
+open Lean Meta Elab Tactic in
+elab "bundle_premises" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let mut premises : Array LocalDecl := #[]
+  for d in ← getLCtx do
+    if ← isPremise d then premises := premises.push d
+  if premises.isEmpty then
+    throwError "bundle_premises: the statement has no hypothesis"
+  let conj := premises.pop.foldr (fun d acc => mkApp2 (mkConst ``And) d.type acc)
+    premises.back!.type
+  let mut g := goal
+  for d in premises.reverse do
+    try
+      g ← g.clear d.fvarId
+    catch _ =>
+      throwError "bundle_premises: a hypothesis is used later in the statement"
+  g.withContext do
+    let target ← instantiateMVars (← g.getType)
+    let newTarget ← mkArrow conj target
+    let newGoal ← mkFreshExprMVarAt (← getLCtx) (← getLocalInstances)
+      newTarget MetavarKind.syntheticOpaque (← g.getTag)
+    g.assign (mkApp (← mkSorry (← mkArrow newTarget target) true) newGoal)
+    replaceMainGoal [newGoal.mvarId!]
 
 -- Tactic for getting the contrapositive of an implication
 open Lean.Elab.Tactic in
 macro "contrapositive" : tactic => `(tactic|
   (
     guard_goal_nums 1
-    revert_props
-    try (simp only [← and_imp])
+    intro_binders
+    bundle_premises
     contrapose
-    simp only [not_and_or, not_le, not_lt]
+    try (simp only [not_and_or, not_le, not_lt, not_not])
     guard_goal_nums 1
   )
 )
@@ -124,8 +171,8 @@ open Lean.Elab.Tactic in
 macro "converse" : tactic => `(tactic|
   (
     guard_goal_nums 1
-    revert_props
-    try (simp only [← and_imp])
+    intro_binders
+    bundle_premises
     apply (by admit : ∀ {p q : Prop}, (q → p) → (p → q))
     guard_goal_nums 1
   )
@@ -139,8 +186,8 @@ open Lean.Elab.Tactic in
 macro "inverse" : tactic => `(tactic|
   (
     guard_goal_nums 1
-    revert_props
-    try (simp only [← and_imp])
+    intro_binders
+    bundle_premises
     apply (by admit : ∀ {p q : Prop}, (¬p → ¬q) → (p → q))
     guard_goal_nums 1
   )
@@ -161,6 +208,7 @@ open Lean.Elab.Tactic in
 macro "de_morgan_rewrite" : tactic => `(tactic|
   (
     guard_goal_nums 1
+    intro_binders
     revert_props
     simp only [not_and_or, not_or, not_forall, not_exists,
                imp_iff_not_or, and_imp, not_not]
@@ -177,6 +225,7 @@ open Lean.Elab.Tactic in
 macro "curry" : tactic => `(tactic|
   (
     guard_goal_nums 1
+    intro_binders
     revert_props
     simp only [and_imp]
     guard_goal_nums 1
@@ -184,13 +233,14 @@ macro "curry" : tactic => `(tactic|
 )
 
 -- Uncurry: rewrite `P → Q → R` into `(P ∧ Q) → R`. Equivalence-preserving.
--- The common case for Mathlib statements (which are usually curried).
+-- The common case for Mathlib statements (which are usually curried). With a
+-- single hypothesis this is the anchor again, which the Python wrapper drops.
 open Lean.Elab.Tactic in
 macro "uncurry" : tactic => `(tactic|
   (
     guard_goal_nums 1
-    revert_props
-    simp only [← and_imp]
+    intro_binders
+    bundle_premises
     guard_goal_nums 1
   )
 )
@@ -211,28 +261,30 @@ macro "unfold_defs" : tactic => `(tactic|
   )
 )
 
--- Removes Prop-valued hypotheses that are not used by the target or by later
--- hypotheses. This implements generalization by weakening hypotheses.
+-- Removes the last Prop-valued hypothesis that nothing else depends on. Fails
+-- when there is none. "Unused by the goal" is not "unused by the proof", so the
+-- result is a stronger claim than the anchor and may well be false.
 open Lean Meta Elab Tactic in
-elab "clear_unused_props" : tactic => do
-  let mut goal ← getMainGoal
+elab "clear_last_prop" : tactic => withMainContext do
+  let goal ← getMainGoal
   let decl ← goal.getDecl
-  let fvars := decl.lctx.foldl (init := #[]) fun acc d =>
-    if d.isImplementationDetail then acc else acc.push d.fvarId
-  for fvarId in fvars.reverse do
-    try
-      let localDecl ← fvarId.getDecl
-      if ← isProp localDecl.type then
-        goal ← goal.clear fvarId
-    catch _ =>
-      pure ()
-  replaceMainGoal [goal]
+  for d in decl.lctx.decls.toArray.reverse do
+    let some d := d | continue
+    if ← isPremise d then
+      try
+        replaceMainGoal [← goal.clear d.fvarId]
+        return
+      catch _ =>
+        pure ()
+  throwError "clear_last_prop: no hypothesis can be dropped"
 
 open Lean.Elab.Tactic in
-macro "drop_unused_hyp" : tactic => `(tactic|
+macro "drop_hypothesis" : tactic => `(tactic|
   (
     guard_goal_nums 1
-    clear_unused_props
+    intro_binders
+    clear_last_prop
+    revert_props
     guard_goal_nums 1
   )
 )

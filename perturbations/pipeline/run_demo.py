@@ -134,7 +134,7 @@ TOY_THEOREMS: list[dict[str, str]] = [
 # here without touching any other file.
 CHAINS: list[list[str]] = [
     ["negate", "negate"],
-    ["drop_unused_hyp", "negate"],
+    ["drop_hypothesis", "negate"],
     ["tc_weaken_hyp", "tc_weaken_hyp"],
     ["tc_weaken_hyp", "negate"],
     ["contrapose", "converse"],

@@ -41,3 +41,18 @@ def test_install_probes_wraps_the_original_oracle_once() -> None:
     assert calls == ["P"]
     assert len(second.calls) == 1
     assert first.calls == []
+
+
+def test_tactic_errors_that_mean_wrong_shape_are_not_applicable() -> None:
+    review = _load_review_module()
+
+    def classify(error: str, ok: bool = False) -> str:
+        probe = review.LeanProbe()
+        probe.calls.append({"kind": "tactic", "tactic": "converse", "candidate": "P" if ok else None,
+                            "ok": ok, "error": error})
+        return review._classify_failure(probe, "P", use_lean=True)[0]
+
+    assert classify("", ok=True) == review.STATUS_NOOP
+    assert classify("bundle_premises: the statement has no hypothesis") == review.STATUS_NOT_APPLICABLE
+    assert classify("`simp` made no progress") == review.STATUS_NOT_APPLICABLE
+    assert classify("unknown free variable `_fvar.12`") == review.STATUS_TACTIC_FAILED

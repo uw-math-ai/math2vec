@@ -20,8 +20,12 @@
 #     prepare  pipeline/prepare_blueprint_anchors.py: theorem/lemma sources → anchors
 #     perturb  pipeline/run_benchmark_review.py --skip-noncompiling: every anchor
 #              is checked against plain Mathlib (autoImplicit off); those that
-#              elaborate get each of the 28 perturbations applied once
-#     eval     pipeline/mteb_perturbation_eval.py with $WIGGLE_EMBED_MODELS
+#              elaborate get each of the 27 perturbations applied once
+#     certify  pipeline/certify_labels.py: Lean automation (simp, grind, aesop,
+#              …) checks each variant against its anchor; positives it cannot
+#              prove equivalent are dropped
+#     eval     pipeline/mteb_perturbation_eval.py with $WIGGLE_EMBED_MODELS, on
+#              certified.jsonl if the certify step has run
 #     plot     pipeline/plot_eval.py → $WIGGLE_BP_OUT/figures/
 #
 # The perturb step stops starting new anchors once it has used up the job's
@@ -36,7 +40,7 @@
 # hence the memory request.
 #
 # Knobs (env vars, all optional):
-#     WIGGLE_BP_STEPS          subset of "build prepare perturb eval plot"
+#     WIGGLE_BP_STEPS          subset of "build prepare perturb certify eval plot"
 #     WIGGLE_BP_LIMIT          only the first N anchors (for trial runs)
 #     WIGGLE_BP_OUT            output directory (default data/blueprint-review)
 #     WIGGLE_EVAL_RESERVE_MIN  minutes kept back for eval + plot (default: a
@@ -91,7 +95,7 @@ if ! command -v lake >/dev/null 2>&1; then
     exit 2
 fi
 
-STEPS="${WIGGLE_BP_STEPS:-build prepare perturb eval plot}"
+STEPS="${WIGGLE_BP_STEPS:-build prepare perturb certify eval plot}"
 CPUS="${SLURM_CPUS_PER_TASK:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
 OUT="${WIGGLE_BP_OUT:-data/blueprint-review}"
 ANCHORS="$OUT/blueprint_anchors.jsonl"
@@ -115,10 +119,16 @@ time_limit_seconds() {
     echo $(( 10#$d * 86400 + 10#$h * 3600 + 10#$m * 60 + 10#$s ))
 }
 DEADLINE_ARGS=()
+PERTURB_DEADLINE_ARGS=()
 if LIMIT_S="$(time_limit_seconds)"; then
     RESERVE_MIN="${WIGGLE_EVAL_RESERVE_MIN:-$(( LIMIT_S / 240 < 90 ? LIMIT_S / 240 : 90 ))}"
     DEADLINE=$(( JOB_START + LIMIT_S - RESERVE_MIN * 60 ))
     DEADLINE_ARGS=(--deadline-epoch "$DEADLINE")
+    PERTURB_DEADLINE_ARGS=(--deadline-epoch "$DEADLINE")
+    # Leave certify half the working time when both steps run.
+    if [[ " ${WIGGLE_BP_STEPS:-certify} " == *" certify "* ]]; then
+        PERTURB_DEADLINE_ARGS=(--deadline-epoch $(( (JOB_START + DEADLINE) / 2 )))
+    fi
 fi
 
 echo "──────────────────────────────────────────────────────────────────────"
@@ -154,15 +164,23 @@ if has_step perturb; then
     echo; echo "══ perturb (one layer, $CPUS workers)"
     python -u pipeline/run_benchmark_review.py \
         --anchors-file "$ANCHORS" "${LIMIT_ARGS[@]}" \
-        --skip-noncompiling --resume "${DEADLINE_ARGS[@]}" \
+        --skip-noncompiling --resume "${PERTURB_DEADLINE_ARGS[@]}" \
         --num-workers "$CPUS" \
         --out "$OUT"
 fi
 
+if has_step certify; then
+    echo; echo "══ certify labels ($CPUS workers)"
+    python -u pipeline/certify_labels.py --run "$OUT" \
+        --resume "${DEADLINE_ARGS[@]}" --num-workers "$CPUS"
+fi
+
 if has_step eval; then
-    echo; echo "══ MTEB eval"
+    EVAL_ROWS="$OUT/results.jsonl"
+    [[ -s "$OUT/certified.jsonl" ]] && EVAL_ROWS="$OUT/certified.jsonl"
+    echo; echo "══ MTEB eval on $EVAL_ROWS"
     HF_HUB_OFFLINE=1 python -u pipeline/mteb_perturbation_eval.py \
-        --results "$OUT/results.jsonl" \
+        --results "$EVAL_ROWS" \
         --models "${MODELS[@]}" \
         --out "$OUT/mteb"
 fi

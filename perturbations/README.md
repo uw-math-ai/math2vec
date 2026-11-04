@@ -29,7 +29,7 @@ Previously: DALAB-May-2026-Lean-wiggle-wiggle
 │       ├── chains.py                    # apply_chain — per-anchor chain runner
 │       ├── pipeline.py                  # run_pipeline — corpus-level runner
 │       └── transforms/                  # Per-layer transform implementations
-│           ├── logical.py               #   negate, contrapose, converse, inverse, drop_unused_hyp
+│           ├── logical.py               #   negate, contrapose, converse, inverse, drop_hypothesis
 │           ├── connectives.py           #   de_morgan_rewrite
 │           ├── quantifiers.py           #   quantifier_swap
 │           ├── typeclass.py             #   tc_weaken_hyp, tc_strengthen_hyp, tc_*_conc
@@ -63,7 +63,7 @@ See each subdirectory's `README.md` for details:
 - [`tests/README.md`](tests/README.md) — how to run the fast vs. live test suites, mocking pattern, recipe for adding a new perturbation test.
 - [`scripts/README.md`](scripts/README.md) — benchmark, Slurm and Tillicum job scripts.
 - [`pipeline/README.md`](pipeline/README.md) — corpus runners and dataset format.
-- [`docs/perturbations.md`](docs/perturbations.md) — catalogue of all 28 perturbations: what each one does, its value, where it performs well, and its limitations.
+- [`docs/perturbations.md`](docs/perturbations.md) — catalogue of all 27 perturbations: what each one does, its value, where it performs well, and its limitations.
 - [`docs/difficulty-spectrum.md`](docs/difficulty-spectrum.md) — which perturbations a model should find hard, and why. Ranks all 28 by how much of the change is hidden from word matching (measured) and by how much knowledge is needed to get it right (predicted).
 - [`docs/HYAK_SETUP.md`](docs/HYAK_SETUP.md) — end-to-end guide for running on UW Hyak (or any Slurm cluster): env bootstrap, dataset pre-download, submit/monitor, resume after walltime, sizing table.
 - [`docs/TILLICUM_SETUP.md`](docs/TILLICUM_SETUP.md) — running the test suites on UW's Tillicum GPU cluster under the `mathai` account.
@@ -85,9 +85,9 @@ gets for free ([`analyze_geometry.py`](pipeline/analyze_geometry.py)):
 - The one-token logical edits (`strictness_swap`, `connective_swap`,
   `const_to_zero_one`, `flip_bound`, …) sit at a surface change of ≈0.00 while
   changing what the theorem says. Those are the pairs worth training on.
-- Positives are the thin side: only `alpha_rename` and `de_morgan_rewrite`
-  rewrite enough of a statement to be worth training on, and they sit at
-  opposite extremes with nothing in between.
+- Positives are the thin side: only `alpha_rename` (since removed: renaming
+  shows no mathematical understanding) and `de_morgan_rewrite` rewrote enough
+  of a statement to be worth training on in that run.
 - Chaining perturbations is what buys distance: at depth 3 the mean collapse
   falls to 0.77, and some variants land as far out as an unrelated theorem.
 
@@ -152,22 +152,24 @@ Key flags for [`pipeline/run_hf_corpus.py`](pipeline/run_hf_corpus.py):
 
 We perturb Lean theorem statements to create similar but distinct statements,
 using a mix of Lean tactics and Python text manipulation. The current registry
-exposes **28 perturbations** across 7 layers:
+exposes **27 perturbations** across 7 layers:
 
 | Layer | Perturbations |
 |---|---|
-| Logical (Lean tactic) | `negate`, `contrapose`, `converse`, `inverse`, `drop_unused_hyp` |
+| Logical (Lean tactic) | `negate`, `contrapose`, `converse`, `inverse`, `drop_hypothesis` |
 | Connective rewriting (Lean tactic) | `de_morgan_rewrite`, `curry`, `uncurry`, `definitional_unfold` |
 | Quantifier scope (Python + Lean validity oracle) | `quantifier_swap`, `forall_to_exists`, `exists_to_forall` |
 | Typeclass / type mutation (Python + Lean validity oracle) | `tc_weaken_hyp`, `tc_strengthen_hyp`, `tc_strengthen_conc`, `tc_weaken_conc`, `tc_sibling_swap`, `specialize_type` |
 | Bound mutation (regex) | `flip_bound`, `bound_tighter` |
-| Structural rewrite (Python + Lean validity oracle) | `alpha_rename`, `premise_permute`, `implicit_explicit_toggle` |
+| Structural rewrite (Python + Lean validity oracle) | `premise_permute`, `implicit_explicit_toggle` |
 | Relation / operator mutation (Python + Lean validity oracle) | `strictness_swap`, `eq_to_le`, `connective_swap`, `arith_op_swap`, `const_to_zero_one` |
 
 Equivalence-preserving perturbations (`contrapose`, `de_morgan_rewrite`, `curry`,
-`uncurry`, `definitional_unfold`, `alpha_rename`, `premise_permute`,
+`uncurry`, `definitional_unfold`, `premise_permute`,
 `implicit_explicit_toggle`) produce *positive* pairs (same meaning, different
-surface syntax); the rest produce graded or hard-negative pairs. Three further
+surface syntax); the rest produce graded or hard-negative pairs.
+[`pipeline/certify_labels.py`](pipeline/certify_labels.py) checks those labels
+with Lean automation and keeps a positive only if it proves both directions. Three further
 perturbations (`dual_full`, `sub_formula_negate`, `notation_unfold`) are designed
 but deferred — they need dedicated Lean metaprogramming rather than text edits.
 

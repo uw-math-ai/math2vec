@@ -23,7 +23,7 @@ from wiggle.registry import (  # noqa: E402
 
 EXPECTED_NAMES = {
     # Logical
-    "negate", "contrapose", "converse", "inverse", "drop_unused_hyp",
+    "negate", "contrapose", "converse", "inverse", "drop_hypothesis",
     # Connectives
     "de_morgan_rewrite", "curry", "uncurry", "definitional_unfold",
     # Quantifiers
@@ -34,7 +34,7 @@ EXPECTED_NAMES = {
     # Bounds
     "flip_bound", "bound_tighter",
     # Structure
-    "alpha_rename", "premise_permute", "implicit_explicit_toggle",
+    "premise_permute", "implicit_explicit_toggle",
     # Relation
     "strictness_swap", "eq_to_le", "connective_swap", "arith_op_swap",
     "const_to_zero_one",

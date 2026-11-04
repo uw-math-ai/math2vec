@@ -8,7 +8,7 @@ runner treats that as a clean stop.
 Modules:
 
   - ``logical``     – tactic-driven: negate, contrapose, converse, inverse,
-                      drop_unused_hyp.
+                      drop_hypothesis.
   - ``connectives`` – tactic-driven: de_morgan_rewrite.
   - ``quantifiers`` – Python text substitution + Lean validity oracle:
                       quantifier_swap.

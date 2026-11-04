@@ -14,7 +14,7 @@ __all__ = [
     "contrapose",
     "converse",
     "inverse",
-    "drop_unused_hyp",
+    "drop_hypothesis",
 ]
 
 
@@ -46,7 +46,11 @@ def inverse(sig: str, type_str: str) -> tuple[str, str] | None:
     return extract_goal("inverse", type_str)
 
 
-def drop_unused_hyp(sig: str, type_str: str) -> tuple[str, str] | None:
-    """Strip Prop-valued hypotheses that are not referenced in the goal."""
+def drop_hypothesis(sig: str, type_str: str) -> tuple[str, str] | None:
+    """Drop the last Prop hypothesis nothing else depends on.
+
+    The result claims more than the anchor (same conclusion, fewer
+    assumptions), so it implies the anchor but is often false.
+    """
     del sig
-    return extract_goal("drop_unused_hyp", type_str)
+    return extract_goal("drop_hypothesis", type_str)

@@ -135,7 +135,7 @@ def test_rerank_data_positives_are_equivalent_variants_only() -> None:
                 "perturbation": pert, "variant": variant, "status": status}
 
     rows = [
-        row("a", "alpha_rename", "v_eq"),          # equivalent → positive
+        row("a", "premise_permute", "v_eq"),          # equivalent → positive
         row("a", "negate", "v_neg"),               # contradictory → negative
         row("a", "eq_to_le", "v_graded"),          # graded → negative
         row("a", "flip_bound", "v_x", "lean_rejected"),
@@ -148,21 +148,93 @@ def test_rerank_data_positives_are_equivalent_variants_only() -> None:
     data = mteb_eval.build_rerank_data(rows)
     assert list(data["queries"]) == ["a"]
     assert data["relevant_docs"]["a"] == {
-        "a::alpha_rename": 1, "a::negate": 0, "a::eq_to_le": 0,
+        "a::premise_permute": 1, "a::negate": 0, "a::eq_to_le": 0,
     }
     assert sorted(data["top_ranked"]["a"]) == sorted(data["relevant_docs"]["a"])
     s = data["stats"]
     assert (s["ambiguous_variants"], s["skipped_no_positive"], s["skipped_no_negative"]) == (1, 1, 1)
 
 
+def test_rerank_data_uses_certified_labels() -> None:
+    mteb_eval = _load("mteb_perturbation_eval")
+
+    def row(pert: str, variant: str, label: str) -> dict:
+        return {"source_id": "a", "original_type_str": "anchor a", "perturbation": pert,
+                "variant": variant, "status": "applied", "label_class": label}
+
+    rows = [
+        row("contrapose", "v_contra", "equivalent"),
+        row("curry", "v_curry", "unverified"),        # positive Lean couldn't prove: dropped
+        row("eq_to_le", "v_eq", "equivalent"),        # "graded" proved equivalent: positive
+        row("negate", "v_neg", "contradictory"),
+    ]
+    data = mteb_eval.build_rerank_data(rows)
+    assert data["relevant_docs"]["a"] == {
+        "a::contrapose": 1, "a::eq_to_le": 1, "a::negate": 0,
+    }
+    assert data["doc_info"]["a::negate"]["class"] == "contradictory"
+
+
+class TestCertifiedClass:
+    certify = _load("certify_labels")
+
+    def cert(self, **proved: bool) -> dict:
+        base = dict.fromkeys(("contradiction", "forward", "backward",
+                              "variant_alone", "anchor_alone"), False)
+        return {**base, **proved}
+
+    def test_reading_off_the_proofs(self) -> None:
+        cls = self.certify.certified_class
+        assert cls(self.cert(contradiction=True, forward=True)) == "contradictory"
+        assert cls(self.cert(forward=True, backward=True)) == "equivalent"
+        assert cls(self.cert(forward=True)) == "entailed"
+        assert cls(self.cert(variant_alone=True)) == "entailed"
+        assert cls(self.cert(backward=True)) == "stronger"
+        assert cls(self.cert()) == "unverified"
+
+    def test_positives_need_a_certificate_negatives_keep_theirs(self) -> None:
+        label = self.certify.label_class
+        assert label("equivalent", "equivalent") == "equivalent"
+        assert label("equivalent", "unverified") == "unverified"
+        assert label("equivalent", "entailed") == "unverified"
+        assert label("equivalent", "contradictory") == "contradictory"
+        assert label("graded", "unverified") == "graded"
+        assert label("graded", "equivalent") == "equivalent"
+        assert label("graded", "stronger") == "graded"
+        assert label("contradictory", "unverified") == "contradictory"
+
+    def test_universes_only_the_anchor_has_are_grounded(self) -> None:
+        ground = self.certify._ground_universes
+        assert ground("∀ {α : Type u_1} {β : Type u_2}, P", "∀ {β : Type u_2}, Q") == \
+            "∀ {α : Type 0} {β : Type u_2}, P"
+        assert ground("∀ {α : Type u_1}, P", "∀ {α : Type u_1}, Q") == "∀ {α : Type u_1}, P"
+
+    def test_easy_anchor_cannot_certify_backward(self) -> None:
+        calls = []
+
+        def fake_proves(statement, intro, heartbeats, timeout):
+            calls.append(statement)
+            return True
+
+        with mock.patch.object(self.certify, "_proves", fake_proves):
+            # contradiction proves first, so nothing else is tried
+            assert self.certify.certificate("A", "V", True, 1, 1)["contradiction"]
+        assert len(calls) == 1
+
+        with mock.patch.object(self.certify, "_proves",
+                               lambda s, *a: "¬" not in s):
+            cert = self.certify.certificate("A", "V", True, 1, 1)
+        assert cert["forward"] and not cert["backward"]
+
+
 def test_pairwise_counts_equivalent_beating_each_negative_class() -> None:
     mteb_eval = _load("mteb_perturbation_eval")
     data = {
-        "relevant_docs": {"a": {"a::alpha_rename": 1, "a::negate": 0, "a::eq_to_le": 0}},
+        "relevant_docs": {"a": {"a::premise_permute": 1, "a::negate": 0, "a::eq_to_le": 0}},
         "doc_info": {"a::negate": {"class": "contradictory"}, "a::eq_to_le": {"class": "graded"}},
     }
     cos = [
-        {"source_id": "a", "perturbation": "alpha_rename", "cosine": 0.9},
+        {"source_id": "a", "perturbation": "premise_permute", "cosine": 0.9},
         {"source_id": "a", "perturbation": "negate", "cosine": 0.8},
         {"source_id": "a", "perturbation": "eq_to_le", "cosine": 0.95},
     ]
@@ -186,7 +258,7 @@ def test_plot_eval_writes_figures_from_a_run_dir(tmp_path: Path) -> None:
     (model_dir / "mteb_scores.json").write_text(json.dumps(
         {"model": "org/model", "scores": {"test": [{"ndcg_at_10": 0.5, "map_at_1000": 0.4}]}}))
     (model_dir / "variant_cosines.csv").write_text(
-        "source_id,perturbation,class,cosine\na,negate,contradictory,0.9\na,alpha_rename,equivalent,0.95\n")
+        "source_id,perturbation,class,cosine\na,negate,contradictory,0.9\na,premise_permute,equivalent,0.95\n")
     (model_dir / "similarity_by_perturbation.csv").write_text(
         "perturbation,class,n,mean_cosine,min_cosine\nnegate,contradictory,1,0.9,0.9\n")
     (model_dir / "pairwise_by_negative.csv").write_text(

@@ -93,7 +93,7 @@ Artifacts (JUnit XML for both pytest stages, demo/review JSONL) land in
 | `fast` | `pytest tests/ --ignore=tests/test_typeclass_mutate.py`, Lean mocked. Expect `134 passed, 3 skipped` | no |
 | `live` | `WIGGLE_RUN_LEAN_INTEGRATION=1 pytest tests/test_lean_server.py::TestRealLeanServer` | yes |
 | `typeclass` | `python tests/test_typeclass_mutate.py` (print-based smoke script) | yes |
-| `demo` | `pipeline/run_demo.py --singles-only`: all 28 perturbations on the 10 curated theorems | yes |
+| `demo` | `pipeline/run_demo.py --singles-only`: all 27 perturbations on the 10 curated theorems | yes |
 | `review` | `run_benchmark_review.py --limit $WIGGLE_REVIEW_LIMIT` then `verify_variants.py`, using all 8 CPUs. Off by default | yes |
 
 Default set: `build fast live typeclass demo`. Pick stages with
@@ -134,7 +134,7 @@ one job:
 2. It keeps the ones that elaborate against plain Mathlib with
    `autoImplicit false`. Many blueprint statements use project-only
    definitions and are skipped.
-3. It applies each of the 28 perturbations once to every kept statement.
+3. It applies each of the 27 perturbations once to every kept statement.
 4. It scores `Qwen/Qwen3-Embedding-8B`, plus `all-MiniLM-L6-v2` as a
    baseline, on the result as an MTEB reranking task.
 5. It draws the diagrams into `data/blueprint-review/figures/`.

@@ -211,6 +211,7 @@ def install_probes(probe: LeanProbe, *, use_lean: bool = True) -> None:
                 "tactic": tactic,
                 "candidate": result[1] if result else None,
                 "ok": result is not None,
+                "error": "" if result or not use_lean else lean_runner.last_extract_error(),
             }
         )
         return result
@@ -233,6 +234,15 @@ STATUS_NEEDS_LEAN = "needs_lean"
 STATUS_ERROR = "error"
 
 
+# Lean errors that mean "this statement has no part the tactic rewrites", as
+# opposed to the tactic breaking on a statement it should handle.
+_SHAPE_MISMATCH_ERRORS = (
+    "made no progress",
+    "no hypothesis",
+    "a hypothesis is used later in the statement",
+)
+
+
 def _classify_failure(probe: LeanProbe, original: str, use_lean: bool) -> tuple[str, str]:
     """Explain why a transform returned None. Returns ``(status, detail)``."""
     if probe.n_calls == 0:
@@ -242,9 +252,15 @@ def _classify_failure(probe: LeanProbe, original: str, use_lean: bool) -> tuple[
     if tactic_calls:
         if not use_lean:
             return STATUS_NEEDS_LEAN, "tactic-driven; cannot run in text-only mode"
+        call = tactic_calls[0]
+        if call["ok"]:
+            return STATUS_NOOP, f"tactic {call.get('tactic')!r} left the statement unchanged"
+        error = call.get("error", "")
+        if any(p in error for p in _SHAPE_MISMATCH_ERRORS):
+            return STATUS_NOT_APPLICABLE, f"tactic {call.get('tactic')!r} does not apply: {error}"
         return (
             STATUS_TACTIC_FAILED,
-            f"tactic {tactic_calls[0].get('tactic')!r} ran but extract_goal produced nothing",
+            f"tactic {call.get('tactic')!r} failed: {error or 'extract_goal produced nothing'}",
         )
 
     cands = probe.candidates
@@ -337,7 +353,7 @@ def process_anchor(
     results and ``skipped=True``.
     """
     from wiggle.chains import normalize_statement
-    from wiggle.lean_runner import compile_lean
+    from wiggle.lean_runner import canonical_form, compile_lean
     from wiggle.registry import ANCHOR_TRUTH, PERTURBATIONS
 
     probe = LeanProbe()
@@ -361,6 +377,18 @@ def process_anchor(
                 }
         else:
             anchor_compiles = compile_lean("", type_str)
+
+    # Perturb the pretty-printed anchor, so text-edit and tactic variants share
+    # its formatting and "differs from the anchor" means the perturbation did
+    # something. Fall back to the raw text if the printed form doesn't
+    # round-trip through the elaborator.
+    raw_type_str = type_str
+    if use_lean and anchor_compiles:
+        canonical = canonical_form(type_str)
+        if canonical:
+            canonical = normalize_statement(canonical)
+            if canonical != type_str and compile_lean("", canonical):
+                type_str = canonical
 
     results: list[dict[str, Any]] = []
     for pert in PERTURBATIONS:
@@ -407,6 +435,8 @@ def process_anchor(
 
     return {
         **anchor,
+        "type_str": type_str,
+        "raw_type_str": raw_type_str,
         "anchor_compiles": anchor_compiles,
         "results": results,
         "total_seconds": round(time.time() - started, 1),

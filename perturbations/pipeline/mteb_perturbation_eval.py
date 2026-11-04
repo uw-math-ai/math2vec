@@ -2,8 +2,9 @@
 
 Each anchor whose perturbations produced both kinds of variant becomes one
 query. Its candidate list is that anchor's own applied variants: the
-``equivalent`` ones (contrapose, alpha_rename, curry, …; see
-``wiggle.registry.SEMANTIC_CLASSES``) are relevant, and every other class
+``equivalent`` ones (contrapose, premise_permute, curry, …; see
+``wiggle.registry.SEMANTIC_CLASSES``, or the Lean-checked ``label_class`` when
+``--results`` is certify_labels.py's ``certified.jsonl``) are relevant, and every other class
 (graded, entailed, contradictory) is a hard negative — a near-identical string
 that states a different theorem. A model that understands the mathematics
 should rank the rewrites of the *same* statement above them.
@@ -64,21 +65,30 @@ def load_rows(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def row_class(r: dict[str, Any]) -> str:
+    """The Lean-certified label if certify_labels.py ran, else the structural one."""
+    return r.get("label_class") or SEMANTIC_CLASSES.get(r["perturbation"], "graded")
+
+
 def build_rerank_data(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Group applied variants by anchor into queries, corpus, qrels and candidates.
 
     A variant text that appears under both an equivalent and a non-equivalent
     perturbation of the same anchor is dropped: its label would be
-    contradictory. Variants identical to their anchor are dropped too.
+    contradictory. Variants identical to their anchor are dropped too, and so
+    are ``unverified`` ones (structurally equivalent, but Lean could not
+    confirm it).
     """
     by_anchor: dict[str, dict[str, Any]] = {}
     for r in rows:
         if r.get("status") != "applied" or not r.get("variant"):
             continue
+        if row_class(r) == "unverified":
+            continue
         a = by_anchor.setdefault(
             r["source_id"], {"text": r["original_type_str"], "variants": defaultdict(list)}
         )
-        a["variants"][" ".join(r["variant"].split())].append(r["perturbation"])
+        a["variants"][" ".join(r["variant"].split())].append((r["perturbation"], row_class(r)))
 
     queries: dict[str, str] = {}
     corpus: dict[str, str] = {}
@@ -94,28 +104,28 @@ def build_rerank_data(rows: list[dict[str, Any]]) -> dict[str, Any]:
         for text, perts in a["variants"].items():
             if text == anchor_norm:
                 continue
-            classes = {SEMANTIC_CLASSES.get(p, "graded") for p in perts}
+            classes = {cls for _, cls in perts}
             is_pos = classes == {"equivalent"}
             if "equivalent" in classes and not is_pos:
                 stats["ambiguous_variants"] += 1
                 continue
-            labelled.append((text, perts[0], int(is_pos)))
-        if not any(lab for _, _, lab in labelled):
+            labelled.append((text, perts[0][0], perts[0][1], int(is_pos)))
+        if not any(lab for *_, lab in labelled):
             stats["skipped_no_positive"] += 1
             continue
-        if all(lab for _, _, lab in labelled):
+        if all(lab for *_, lab in labelled):
             stats["skipped_no_negative"] += 1
             continue
 
         queries[qid] = a["text"]
         relevant_docs[qid] = {}
         top_ranked[qid] = []
-        for text, pert, lab in labelled:
+        for text, pert, cls, lab in labelled:
             did = f"{qid}::{pert}"
             corpus[did] = text
             relevant_docs[qid][did] = lab
             top_ranked[qid].append(did)
-            doc_info[did] = {"perturbation": pert, "class": SEMANTIC_CLASSES.get(pert, "graded")}
+            doc_info[did] = {"perturbation": pert, "class": cls}
 
     stats["queries"] = len(queries)
     stats["documents"] = len(corpus)
@@ -195,7 +205,8 @@ def variant_cosines(rows: list[dict[str, Any]], st_model: Any, batch_size: int) 
     """cosine(anchor, variant) for every applied variant, no instruction prompt."""
     import numpy as np
 
-    pairs = [r for r in rows if r.get("status") == "applied" and r.get("variant")]
+    pairs = [r for r in rows if r.get("status") == "applied" and r.get("variant")
+             and row_class(r) != "unverified"]
     if not pairs:
         return []
     texts = sorted({t for r in pairs for t in (r["original_type_str"], r["variant"])})
@@ -205,7 +216,7 @@ def variant_cosines(rows: list[dict[str, Any]], st_model: Any, batch_size: int) 
     emb = np.asarray(emb, dtype=np.float32)
     return [
         {"source_id": r["source_id"], "perturbation": r["perturbation"],
-         "class": SEMANTIC_CLASSES.get(r["perturbation"], "graded"),
+         "class": row_class(r),
          "cosine": round(float(np.dot(emb[index[r["original_type_str"]]],
                                       emb[index[r["variant"]]])), 5)}
         for r in pairs

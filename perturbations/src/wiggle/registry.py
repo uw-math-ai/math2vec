@@ -116,10 +116,12 @@ PERTURBATIONS: list[Perturbation] = [
         layer="logical",
     ),
     Perturbation(
-        name="drop_unused_hyp",
-        fn=logical.drop_unused_hyp,
-        propagation={"true": "true", "false": "unknown", "unknown": "unknown"},
-        description="Strip Prop-valued hypotheses not used by the goal. True.",
+        name="drop_hypothesis",
+        fn=logical.drop_hypothesis,
+        # Fewer hypotheses is a stronger claim: it implies the anchor, so a
+        # false anchor stays false, but a true one may not survive.
+        propagation={"true": "unknown", "false": "false", "unknown": "unknown"},
+        description="Drop one Prop hypothesis (stronger claim). Unknown.",
         layer="logical",
     ),
     # ── Layer 2: connective rewriting (Lean tactics) ─────────────────────────
@@ -192,13 +194,6 @@ PERTURBATIONS: list[Perturbation] = [
         layer="bounds",
     ),
     # ── Layer 6: structural rewrites (equivalence-preserving positives) ───────
-    Perturbation(
-        name="alpha_rename",
-        fn=structure.alpha_rename,
-        propagation={"true": "true", "false": "false", "unknown": "unknown"},
-        description="Rename bound variables to other idiomatic names. Equivalent.",
-        layer="structure",
-    ),
     Perturbation(
         name="premise_permute",
         fn=structure.premise_permute,

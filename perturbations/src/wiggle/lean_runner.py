@@ -177,10 +177,13 @@ def extract_goal(tactic: str, type_str: str) -> tuple[str, str] | None:
         "  extract_goal\n"
         "  sorry\n"
     )
+    global _last_extract_error
     output = run_lean(code)
     m = _EXTRACTED_RE.search(output)
     if m is None:
+        _last_extract_error = _first_error(output)
         return None
+    _last_extract_error = ""
 
     # The extracted theorem may span multiple lines when the goal is large
     # (e.g. after `unfold_defs`). Take everything from the `theorem …extracted`
@@ -230,3 +233,29 @@ def extract_goal(tactic: str, type_str: str) -> tuple[str, str] | None:
 
 # `theorem <name>` with an optional universe list, e.g. `foo.extracted_1.{u_1, u_2}`.
 _THEOREM_HEADER_RE = re.compile(r"theorem\s+[^\s({\[]+(?:(?<=\.)\{[^}]*\})?")
+
+_last_extract_error = ""
+_ERROR_RE = re.compile(r"error:\s*(.*)")
+
+
+def _first_error(output: str) -> str:
+    m = _ERROR_RE.search(output)
+    return " ".join(m.group(1).split())[:300] if m else ""
+
+
+def last_extract_error() -> str:
+    """First Lean error from the most recent failed ``extract_goal`` call."""
+    return _last_extract_error
+
+
+def canonical_form(type_str: str) -> str | None:
+    """``type_str`` as Lean's pretty-printer writes it, or None on failure.
+
+    Tactic-produced variants come back pretty-printed (`x * (1 - y)`, binder
+    types spelled out, unused hypothesis names dropped as plain `→`), while
+    anchors arrive as the author typed them. Running anchors through the same
+    printer means an anchor and its variants differ only by the perturbation,
+    not by formatting.
+    """
+    result = extract_goal("skip", type_str)
+    return result[1] if result else None
