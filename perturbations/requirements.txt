@@ -12,3 +12,6 @@ mteb>=2.26
 sentence-transformers>=3.0
 transformers>=4.51  # first release with Qwen3
 huggingface_hub
+# Fine-tuning (../finetune/train_perturbation_mnrl.py via scripts/tillicum_train.slurm).
+accelerate
+datasets

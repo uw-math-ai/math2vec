@@ -54,6 +54,8 @@ REPORTED_SCORES = ("ndcg_at_10", "map_at_1000", "mrr_at_10", "precision_at_1")
 
 
 def model_slug(name: str) -> str:
+    if Path(name).is_dir():
+        return Path(name).resolve().name
     return name.replace("/", "__")
 
 
@@ -179,16 +181,29 @@ def make_task(data: dict[str, Any]):
     return WigglePerturbationReranking()
 
 
-def load_model(name: str):
-    """``mteb`` model for ``name``; models over 1B parameters load in bf16 on GPU."""
+def load_model(name: str, base_model: str | None = None):
+    """``mteb`` model for ``name``; models over 1B parameters load in bf16 on GPU.
+
+    ``name`` may be a local fine-tuned checkpoint, which mteb's registry does
+    not know. It is then loaded with ``base_model``'s registered loader, so it
+    gets the same query prompt format as the model it was trained from.
+    """
     import mteb
     import torch
 
+    local = Path(name).is_dir()
+    meta = mteb.get_model_meta(base_model if local and base_model else name) \
+        if not local or base_model else None
     kwargs: dict[str, Any] = {}
-    meta = mteb.get_model_meta(name)
-    if torch.cuda.is_available() and (meta.n_parameters or 0) > 1_000_000_000:
+    if torch.cuda.is_available() and meta is not None and (meta.n_parameters or 0) > 1_000_000_000:
         kwargs["model_kwargs"] = {"dtype": torch.bfloat16}
-    return mteb.get_model(name, **kwargs)
+    if not local:
+        return mteb.get_model(name, **kwargs)
+    if meta is None:
+        from sentence_transformers import SentenceTransformer
+
+        return SentenceTransformer(name, **kwargs)
+    return meta.loader(name, revision=None, **meta.loader_kwargs, **kwargs)
 
 
 def sentence_transformer_of(model: Any, name: str):
@@ -274,7 +289,7 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def evaluate_model(name: str, rows: list[dict[str, Any]], data: dict[str, Any],
-                   out: Path, batch_size: int) -> None:
+                   out: Path, batch_size: int, base_model: str | None = None) -> None:
     import mteb
     import torch
 
@@ -282,7 +297,7 @@ def evaluate_model(name: str, rows: list[dict[str, Any]], data: dict[str, Any],
     device = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu"
     print(f"\n── {name} on {device}", flush=True)
 
-    model = load_model(name)
+    model = load_model(name, base_model)
     result = mteb.evaluate(
         model, make_task(data), cache=None,
         encode_kwargs={"batch_size": batch_size}, show_progress_bar=False,
@@ -317,6 +332,9 @@ def main() -> int:
     ap.add_argument("--models", nargs="+", default=DEFAULT_MODELS)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--batch-size", type=int, default=64)
+    ap.add_argument("--base-model",
+                    help="registered model whose loader and prompts to use for any "
+                         "--models entry that is a local fine-tuned checkpoint")
     args = ap.parse_args()
 
     rows = load_rows(args.results)
@@ -331,7 +349,8 @@ def main() -> int:
     errors = {}
     for name in args.models:
         try:
-            evaluate_model(name, rows, data, args.out / model_slug(name), args.batch_size)
+            evaluate_model(name, rows, data, args.out / model_slug(name), args.batch_size,
+                           args.base_model)
         except Exception:  # one bad model shouldn't cost the others
             errors[name] = traceback.format_exc()
             print(f"   FAILED:\n{errors[name]}", file=sys.stderr, flush=True)

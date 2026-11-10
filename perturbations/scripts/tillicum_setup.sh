@@ -85,6 +85,8 @@ for name in sys.argv[1:]:
     path = snapshot_download(name, revision=meta.revision)
     print(f"  {name} @ {meta.revision} -> {path}")
 EOF
+# NL -> Lean pairs that tillicum_train.slurm mixes into fine-tuning.
+python -c "from datasets import load_dataset; load_dataset('FrenzyMath/mathlib_informal_v4.19.0', split='train')"
 
 echo
 echo "Setup done. Next, from $PROJECT_ROOT:"
