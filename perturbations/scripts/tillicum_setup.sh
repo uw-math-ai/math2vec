@@ -67,7 +67,18 @@ pip install -r "$PROJECT_ROOT/requirements.txt"
 # compiled from source. Also installs the toolchain pinned in lean-toolchain.
 echo "[3/4] fetching Mathlib cache (first run: several GB, ~10 min)"
 cd "$PROJECT_ROOT"
-lake exe cache get
+# A CA path that does not exist (often set by the conda env) makes curl fail
+# every download with "OpenSSL ... unregistered scheme".
+for var in SSL_CERT_FILE CURL_CA_BUNDLE REQUESTS_CA_BUNDLE SSL_CERT_DIR; do
+    if [[ -n "${!var:-}" && ! -e "${!var}" ]]; then
+        echo "      unsetting $var (missing path: ${!var})"
+        unset "$var"
+    fi
+done
+if [[ -z "${CURL_CA_BUNDLE:-}" && -f /etc/pki/tls/certs/ca-bundle.crt ]]; then
+    export CURL_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt
+fi
+PATH="/usr/bin:$PATH" lake exe cache get
 
 # ── 4. Embedding models ──────────────────────────────────────────────────────
 # Download only (no loading: the 8B model would need ~30 GB of login-node
