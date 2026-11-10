@@ -1,0 +1,140 @@
+{
+  "n_anchors": 10,
+  "n_variants": 49,
+  "background_similarity": {
+    "tfidf_token": 0.34556949683792926,
+    "tfidf_char": 0.21445210688104635,
+    "jaccard": 0.3910702632870723,
+    "sequence": 0.3830353831334326
+  },
+  "per_perturbation": [
+    {
+      "perturbation": "negate",
+      "semantic_class": "contradictory",
+      "n": 3,
+      "surface_delta": 0.3155296128887387,
+      "meaning_delta": 1.0,
+      "signal": 0.6844703871112613
+    },
+    {
+      "perturbation": "connective_swap",
+      "semantic_class": "graded",
+      "n": 1,
+      "surface_delta": 0.008554103667367752,
+      "meaning_delta": 0.67,
+      "signal": 0.6614458963326323
+    },
+    {
+      "perturbation": "arith_op_swap",
+      "semantic_class": "graded",
+      "n": 1,
+      "surface_delta": 0.013479779342455256,
+      "meaning_delta": 0.67,
+      "signal": 0.6565202206575448
+    },
+    {
+      "perturbation": "tc_sibling_swap",
+      "semantic_class": "graded",
+      "n": 2,
+      "surface_delta": 0.01402772292811394,
+      "meaning_delta": 0.67,
+      "signal": 0.6559722770718861
+    },
+    {
+      "perturbation": "const_to_zero_one",
+      "semantic_class": "graded",
+      "n": 2,
+      "surface_delta": 0.0178307406309951,
+      "meaning_delta": 0.67,
+      "signal": 0.6521692593690049
+    },
+    {
+      "perturbation": "strictness_swap",
+      "semantic_class": "graded",
+      "n": 2,
+      "surface_delta": 0.02441976116024258,
+      "meaning_delta": 0.67,
+      "signal": 0.6455802388397575
+    },
+    {
+      "perturbation": "flip_bound",
+      "semantic_class": "graded",
+      "n": 2,
+      "surface_delta": 0.027266750587671473,
+      "meaning_delta": 0.67,
+      "signal": 0.6427332494123286
+    },
+    {
+      "perturbation": "tc_strengthen_conc",
+      "semantic_class": "graded",
+      "n": 1,
+      "surface_delta": 0.03556248934460804,
+      "meaning_delta": 0.67,
+      "signal": 0.634437510655392
+    },
+    {
+      "perturbation": "tc_weaken_hyp",
+      "semantic_class": "graded",
+      "n": 2,
+      "surface_delta": 0.16536760910297477,
+      "meaning_delta": 0.67,
+      "signal": 0.5046323908970253
+    },
+    {
+      "perturbation": "drop_unused_hyp",
+      "semantic_class": "entailed",
+      "n": 3,
+      "surface_delta": 0.06784618524163377,
+      "meaning_delta": 0.34,
+      "signal": 0.27215381475836625
+    },
+    {
+      "perturbation": "tc_strengthen_hyp",
+      "semantic_class": "entailed",
+      "n": 5,
+      "surface_delta": 0.08499267064602645,
+      "meaning_delta": 0.34,
+      "signal": 0.2550073293539736
+    },
+    {
+      "perturbation": "specialize_type",
+      "semantic_class": "entailed",
+      "n": 9,
+      "surface_delta": 0.24973346043979405,
+      "meaning_delta": 0.34,
+      "signal": 0.09026653956020597
+    },
+    {
+      "perturbation": "implicit_explicit_toggle",
+      "semantic_class": "equivalent",
+      "n": 10,
+      "surface_delta": 0.01259379440242303,
+      "meaning_delta": 0.0,
+      "signal": -0.01259379440242303
+    },
+    {
+      "perturbation": "uncurry",
+      "semantic_class": "equivalent",
+      "n": 2,
+      "surface_delta": 0.10225394807385957,
+      "meaning_delta": 0.0,
+      "signal": -0.10225394807385957
+    },
+    {
+      "perturbation": "de_morgan_rewrite",
+      "semantic_class": "equivalent",
+      "n": 3,
+      "surface_delta": 0.23572675091104056,
+      "meaning_delta": 0.0,
+      "signal": -0.23572675091104056
+    },
+    {
+      "perturbation": "alpha_rename",
+      "semantic_class": "equivalent",
+      "n": 1,
+      "surface_delta": 1.0571852908713963,
+      "meaning_delta": 0.0,
+      "signal": -1.0571852908713963
+    }
+  ]
+}

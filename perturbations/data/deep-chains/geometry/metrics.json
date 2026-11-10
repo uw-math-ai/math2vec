@@ -1,0 +1,148 @@
+{
+  "n_anchors": 10,
+  "n_variants": 158,
+  "background_similarity": {
+    "tfidf_token": 0.2722564526894664,
+    "tfidf_char": 0.14153662041419798,
+    "jaccard": 0.3910702632870723,
+    "sequence": 0.3830353831334326
+  },
+  "per_perturbation": [
+    {
+      "perturbation": "negate",
+      "semantic_class": "contradictory",
+      "n": 14,
+      "surface_delta": 0.23901022089860324,
+      "meaning_delta": 1.0,
+      "signal": 0.7609897791013968
+    },
+    {
+      "perturbation": "const_to_zero_one",
+      "semantic_class": "graded",
+      "n": 14,
+      "surface_delta": 0.002144021035802912,
+      "meaning_delta": 0.67,
+      "signal": 0.6678559789641971
+    },
+    {
+      "perturbation": "eq_to_le",
+      "semantic_class": "graded",
+      "n": 4,
+      "surface_delta": 0.0036624142067226417,
+      "meaning_delta": 0.67,
+      "signal": 0.6663375857932774
+    },
+    {
+      "perturbation": "connective_swap",
+      "semantic_class": "graded",
+      "n": 15,
+      "surface_delta": 0.0038954897023241175,
+      "meaning_delta": 0.67,
+      "signal": 0.6661045102976759
+    },
+    {
+      "perturbation": "arith_op_swap",
+      "semantic_class": "graded",
+      "n": 16,
+      "surface_delta": 0.007430883206013927,
+      "meaning_delta": 0.67,
+      "signal": 0.6625691167939861
+    },
+    {
+      "perturbation": "flip_bound",
+      "semantic_class": "graded",
+      "n": 11,
+      "surface_delta": 0.0076735795896305525,
+      "meaning_delta": 0.67,
+      "signal": 0.6623264204103695
+    },
+    {
+      "perturbation": "tc_sibling_swap",
+      "semantic_class": "graded",
+      "n": 10,
+      "surface_delta": 0.007940805177616306,
+      "meaning_delta": 0.67,
+      "signal": 0.6620591948223837
+    },
+    {
+      "perturbation": "strictness_swap",
+      "semantic_class": "graded",
+      "n": 15,
+      "surface_delta": 0.008306872311842906,
+      "meaning_delta": 0.67,
+      "signal": 0.6616931276881571
+    },
+    {
+      "perturbation": "tc_strengthen_hyp",
+      "semantic_class": "entailed",
+      "n": 1,
+      "surface_delta": 0.030100893671993312,
+      "meaning_delta": 0.34,
+      "signal": 0.3098991063280067
+    },
+    {
+      "perturbation": "drop_unused_hyp",
+      "semantic_class": "entailed",
+      "n": 6,
+      "surface_delta": 0.06796320723972016,
+      "meaning_delta": 0.34,
+      "signal": 0.27203679276027987
+    },
+    {
+      "perturbation": "specialize_type",
+      "semantic_class": "entailed",
+      "n": 11,
+      "surface_delta": 0.07477196699477806,
+      "meaning_delta": 0.34,
+      "signal": 0.26522803300522196
+    },
+    {
+      "perturbation": "premise_permute",
+      "semantic_class": "equivalent",
+      "n": 1,
+      "surface_delta": 7.771561172376096e-16,
+      "meaning_delta": 0.0,
+      "signal": -7.771561172376096e-16
+    },
+    {
+      "perturbation": "implicit_explicit_toggle",
+      "semantic_class": "equivalent",
+      "n": 15,
+      "surface_delta": 0.003936576998342045,
+      "meaning_delta": 0.0,
+      "signal": -0.003936576998342045
+    },
+    {
+      "perturbation": "curry",
+      "semantic_class": "equivalent",
+      "n": 1,
+      "surface_delta": 0.03512857128569857,
+      "meaning_delta": 0.0,
+      "signal": -0.03512857128569857
+    },
+    {
+      "perturbation": "uncurry",
+      "semantic_class": "equivalent",
+      "n": 9,
+      "surface_delta": 0.06800961597697275,
+      "meaning_delta": 0.0,
+      "signal": -0.06800961597697275
+    },
+    {
+      "perturbation": "de_morgan_rewrite",
+      "semantic_class": "equivalent",
+      "n": 7,
+      "surface_delta": 0.1885853743162228,
+      "meaning_delta": 0.0,
+      "signal": -0.1885853743162228
+    },
+    {
+      "perturbation": "alpha_rename",
+      "semantic_class": "equivalent",
+      "n": 8,
+      "surface_delta": 0.8830417305033322,
+      "meaning_delta": 0.0,
+      "signal": -0.8830417305033322
+    }
+  ]
+}
