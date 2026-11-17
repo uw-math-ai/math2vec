@@ -1,8 +1,12 @@
-# A2 — Explicit view-pair enumeration
+# A1 training run 2 — Explicit view-pair enumeration
+
+Second training run on the **A1 Mathlib-docstrings dataset**
+(`a1_kept_concepts_v4.19.0.jsonl`). Same data as training run 1; what changes
+is how view pairs are built. "A1" names the dataset, not the run.
 
 **Status:** planned, not implemented. Nothing here has been run.
 **Open questions:** see §10 — Q1 (in-batch false negatives) is blocking.
-**Depends on:** the A1 run (`a1_README.md`) finishing, so A2 has a baseline.
+**Depends on:** training run 1 (`a1_README.md`) finishing, so run 2 has a baseline.
 **Author's note:** written at the end of the A1 setup session, 2026-11-16.
 
 ---
@@ -41,7 +45,7 @@ With 2 epochs the concept gets **2 draws out of 3 possible pairs**. Coverage is
 stochastic and incomplete, and resampling per epoch is deliberate — the
 docstring calls it "SimCLR-style stochastic pairing."
 
-**A2 changes coverage from random to exhaustive. It does not add new data.**
+**Run 2 changes coverage from random to exhaustive. It does not add new data.**
 For a concept with `n` views, rows go from 1 to `C(n, 2)`.
 
 ## 3. Why "this should increase performance no matter what" is not safe
@@ -57,7 +61,7 @@ explicitly pushes apart two descriptions of the same theorem. That is a direct
 training signal *against* what we want.
 
 Today this is nearly impossible: one row per concept means a concept cannot
-collide with itself. Under A2 a concept occupies up to `C(n,2)` rows, so
+collide with itself. Under run 2 a concept occupies up to `C(n,2)` rows, so
 collisions become likely — and worse, consecutive rows from the same concept
 will sit in the same batch unless shuffling separates them.
 
@@ -95,7 +99,7 @@ diverge. Decide which one the comparison holds fixed, and say so in the writeup.
 4. **Epoch budget.** Match epochs (simpler) or match total steps (fairer)?
    Recommended: run epoch-matched, and record total steps in `metrics.json`
    so a step-matched reading is still possible.
-5. **Baseline.** A2 must be compared against the **A1 arm**, not the paper arm,
+5. **Baseline.** Run 2 must be compared against the **run-1 (A1) arm**, not the paper arm,
    on the **same dev set** — so same `--local_jsonl`, `--seed 42`, `--dev_frac 0.1`,
    no `--max_rows`.
 
@@ -117,24 +121,24 @@ build a flat list of `(record_idx, view_i, view_j)` at construction, have
 
 Record in `metrics.json` under `counts`: `pairs_total`, `pairs_per_concept_avg`,
 `pairs_capped`, plus `batch_sampler` under `lr_schedule`, so a reader can tell
-an A2 run from an A1 run without reading the log.
+a run-2 run from a run-1 run without reading the log.
 
 **Leave eval completely alone.** `eval_retrieval` / `eval_all_pair_types` /
-`group_split_records` must not change, or A2 is not comparable to A1.
+`group_split_records` must not change, or run 2 is not comparable to run 1.
 
 ## 6. Required GitHub updates
 
 | File | Change |
 |---|---|
 | `finetune/train_qwen_mnrl_multiview_v3_tg.py` | the three flags, `ExplicitPairDataset`, concept-aware batch sampler, extra `metrics.json` counts |
-| `slurmscripts/a2_run.slurm` | new; A1 recipe + `--explicit_view_pairs` |
-| `slurmscripts/a2_smoke.slurm` | new; debug QOS, 0.6B, `--max_rows 2000`, asserts pair counts and no-duplicate batching |
-| `slurmscripts/a1_report.py` | print `pairs_total` / `pairs_per_concept_avg` when present; treat A2 as a third arm |
+| `slurmscripts/a1_run2.slurm` | new; A1 recipe + `--explicit_view_pairs` |
+| `slurmscripts/a1_smoke2.slurm` | new; debug QOS, 0.6B, `--max_rows 2000`, asserts pair counts and no-duplicate batching |
+| `slurmscripts/a1_report.py` | print `pairs_total` / `pairs_per_concept_avg` when present; treat run 2 as a third arm |
 | `slurmscripts/a1_README.md` | link to this plan |
-| `slurmscripts/a2_explicit_pairs_PLAN.md` | mark implemented, record results |
+| `slurmscripts/a1_trainingrun2_PLAN.md` | mark implemented, record results |
 
 Branch: continue on `trainingdata-mathlibdocstring`, or cut
-`experiment-a2-explicit-pairs` off it. Commit and push before touching Tillicum —
+`experiment-a1-run2-explicit-pairs` off it. Commit and push before touching Tillicum —
 the cluster pulls from `origin`.
 
 ## 7. Tillicum commands (after the code is pushed)
@@ -143,53 +147,53 @@ the cluster pulls from `origin`.
 # refresh the working copy
 cd /gpfs/scrubbed/$USER/mathlib-ft/repo && git pull --ff-only && cd ..
 cp repo/finetune/train_qwen_mnrl_multiview_v3_tg.py .
-cp repo/slurmscripts/a2_run.slurm repo/slurmscripts/a2_smoke.slurm .
+cp repo/slurmscripts/a1_run2.slurm repo/slurmscripts/a1_smoke2.slurm .
 
 # 1. smoke test FIRST -- debug QOS, ~20 min, ~$0.75
-sbatch a2_smoke.slurm
-grep -E '^\[pairs\]|PASS:|FAIL:' logs/mv3_smoke_a2_*.out
+sbatch a1_smoke2.slurm
+grep -E '^\[pairs\]|PASS:|FAIL:' logs/mv3_smoke_a1_run2_*.out
 
-# 2. the real A2 arm -- only after the smoke test passes
-sbatch --job-name=mv3_qwen8b_a2_ep2 \
-  --export=ALL,RUN=mv3_qwen8b_a2_ep2,EXTRA=data/a1_kept_concepts_v4.19.0.jsonl \
-  a2_run.slurm
+# 2. the real run-2 arm -- only after the smoke test passes
+sbatch --job-name=mv3_qwen8b_a1_run2_ep2 \
+  --export=ALL,RUN=mv3_qwen8b_a1_run2_ep2,EXTRA=data/a1_kept_concepts_v4.19.0.jsonl \
+  a1_run2.slurm
 
-# 3. results: A2 vs A1 vs paper, all on the same dev set
+# 3. results: run 2 vs run 1 vs paper, all on the same dev set
 squeue -u $USER -o '%.10i %.14j %.8T %.10M %R'
-bash repo/slurmscripts/a1_collect.sh mv3_qwen8b_a2_ep2
+bash repo/slurmscripts/a1_collect.sh mv3_qwen8b_a1_run2_ep2
 python repo/slurmscripts/a1_report.py \
   checkpoints/mv3_qwen8b_paper_ep2 \
   checkpoints/mv3_qwen8b_a1_ep2 \
-  checkpoints/mv3_qwen8b_a2_ep2
+  checkpoints/mv3_qwen8b_a1_run2_ep2
 ```
 
 Cost: expect **more** than A1's ~8.3 h, since steps scale with pair count.
 Cap rows per concept to keep it inside the 12 h request, or raise `--time`.
-At ~$0.90/GPU-hour, budget **$9-13** for the A2 arm.
+At ~$0.90/GPU-hour, budget **$9-13** for the run-2 arm.
 
 Account is `mathai`; QOS available: `debug`, `interactive`, `normal`.
 
-## 8. Known facts carried over from A1
+## 8. Known facts carried over from training run 1
 
 * A1 overlap: 14,501 / 18,747 concept_ids (77.4%) already in base; 4,246 (22.6%) new.
 * A1 docstrings are **not** restatements: 0 byte-identical, median text
   similarity 0.129, near-duplicate share 0.1%.
 * Base `nl_informal` is verbose LaTeX prose; A1 is terse Mathlib docstrings with
   Lean notation. Two different registers for the same theorem — which is exactly
-  why `(nl_base, nl_a1)` NL↔NL pairs may matter, and why A2's cross-modal-only
+  why `(nl_base, nl_a1)` NL↔NL pairs may matter, and why run 2's cross-modal-only
   default deserves an all-pairs ablation.
 * Base file: 133,621 rows but 126,059 unique `concept_id`s (~7,562 duplicate ids).
-* Eval is 6 pair types; A1/A2 data only has `nl_informal` + `lean_signature`, so
+* Eval is 6 pair types; the A1 dataset only has `nl_informal` + `lean_signature`, so
   only pair types 1 and 6 can move. Types 2-5 stay flat by construction.
 
 ## 10. Open questions
 
-Nothing here is settled. Q1-Q4 are A2 design; Q5-Q9 came out of the A1 session
+Nothing here is settled. Q1-Q4 are run-2 design; Q5-Q9 came out of the A1 session
 and apply to the project generally. **Deferred by decision: revisit after the
 first multi-arm run (paper vs A1) completes** — the results may answer or
 reprioritise several of them.
 
-### Q1. Can `model.fit()` take a no-duplicates batch sampler? **BLOCKING for A2**
+### Q1. Can `model.fit()` take a no-duplicates batch sampler? **BLOCKING for run 2**
 
 `CachedMultipleNegativesRankingLoss` uses in-batch negatives. Under explicit
 pair enumeration a concept occupies several rows, so two rows of the same
@@ -199,12 +203,12 @@ of the same theorem. See §3.1.
 Unknown: whether the legacy `model.fit()` path accepts a batch sampler at all.
 `sentence_transformers` 5.1.2 ships `BatchSamplers.NO_DUPLICATES`, but it is
 wired to `SentenceTransformerTrainer`, not `fit()`. If `fit()` cannot take one,
-A2 needs either a custom pre-shuffled ordering that guarantees separation, or a
+run 2 needs either a custom pre-shuffled ordering that guarantees separation, or a
 migration to `SentenceTransformerTrainer` — a much larger change that would also
 alter the paper recipe's training loop.
 
 *Resolve by:* reading the installed `sentence_transformers` source on Tillicum
-before writing any A2 code. Cheap, no GPU.
+before writing any run-2 code. Cheap, no GPU.
 
 ### Q2. Pair scope: all `C(n,2)` pairs, or cross-modal `(NL, Lean)` only?
 
@@ -231,7 +235,7 @@ step-matched reading stays possible after the fact.
 whether `load_concepts` dedupes, merges views, or keeps both rows — and
 therefore whether some concepts are silently upweighted in the paper recipe
 itself. Pre-existing, not introduced by A1, but it affects how pair counts are
-computed in A2.
+computed in run 2.
 
 *Resolve by:* reading `load_concepts` and counting, no GPU.
 
@@ -270,7 +274,7 @@ of synthesising data, which changes what the experiment is testing.
 `a1_kept_concepts_v4.19.0.jsonl` has empty `hard_negatives.nl` / `.lean` arrays,
 and the paper recipe disables the hard-negative loader anyway
 (`--n_hard_negs 1000`). Whether mining hard negatives for the A1 concepts would
-help is untested and orthogonal to A2.
+help is untested and orthogonal to run 2.
 
 ### Resolved during the A1 session (recorded so they are not re-litigated)
 
@@ -289,9 +293,9 @@ help is untested and orthogonal to A2.
 
 > I'm on the Math2Vec project (UW Math AI Lab), working in the `math2vec` repo on
 > branch `trainingdata-mathlibdocstring`. Read
-> `slurmscripts/a2_explicit_pairs_PLAN.md` first — it has the full context.
+> `slurmscripts/a1_trainingrun2_PLAN.md` first — it has the full context.
 >
-> I want to implement experiment A2: explicit view-pair enumeration. Right now
+> I want to implement A1 training run 2: explicit view-pair enumeration. Right now
 > `MultiViewBaseDataset` in `finetune/train_qwen_mnrl_multiview_v3_tg.py` emits
 > one row per concept and picks 2 views at random per epoch. I want each concept
 > to emit one row per view pair instead, so a Lean statement with two different
@@ -310,9 +314,9 @@ help is untested and orthogonal to A2.
 >    and `--max_pairs_per_concept`, so the paper recipe is unchanged by default.
 >    Record `pairs_total` / `pairs_per_concept_avg` / `pairs_capped` in
 >    `metrics.json`. Do not touch `eval_retrieval`, `eval_all_pair_types` or
->    `group_split_records` — A2 must stay comparable to A1 on the same dev set.
-> 2. Write `slurmscripts/a2_smoke.slurm` (debug QOS, 0.6B, `--max_rows 2000`,
->    under 30 min) and `slurmscripts/a2_run.slurm` (normal QOS, 8B, A1 recipe
+>    `group_split_records` — run 2 must stay comparable to run 1 on the same dev set.
+> 2. Write `slurmscripts/a1_smoke2.slurm` (debug QOS, 0.6B, `--max_rows 2000`,
+>    under 30 min) and `slurmscripts/a1_run2.slurm` (normal QOS, 8B, A1 recipe
 >    plus the new flags), modelled on the `a1_*` scripts. Account `mathai`, no
 >    `--partition` line.
 > 3. Update `slurmscripts/a1_report.py` to show the pair counts and handle a

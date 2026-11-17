@@ -122,7 +122,7 @@ never changes it.
 
 ## Follow-on experiment
 
-`a2_explicit_pairs_PLAN.md` plans experiment A2: enumerate view pairs explicitly
+`a1_trainingrun2_PLAN.md` plans training run 2 on the same A1 dataset: enumerate view pairs explicitly
 instead of sampling two views at random per epoch, so a Lean statement with two
 NL descriptions becomes two training rows. Planned only -- not implemented.
 
