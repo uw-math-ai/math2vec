@@ -17,6 +17,10 @@ Both start from stock `Qwen/Qwen3-Embedding-8B`, use the identical recipe, and
 share a byte-identical dev set. The only difference is the extra training data,
 which is what makes the comparison mean anything. ~8.3 h and ~$7.50 per arm.
 
+> **New to this experiment?** Read `a1_EXPERIMENT_SUMMARY.md` first -- it
+> explains what the two arms are, how the overlapping theorems are handled, and
+> how to read the results. This file is the operational how-to.
+
 ## Run order
 
 ```bash
