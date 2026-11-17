@@ -120,6 +120,12 @@ module list with `random.Random(seed)`, so the same data + seed + dev_frac +
 max_rows always gives the same dev set. `EXTRA` is applied after the split and
 never changes it.
 
+## Follow-on experiment
+
+`a2_explicit_pairs_PLAN.md` plans experiment A2: enumerate view pairs explicitly
+instead of sampling two views at random per epoch, so a Lean statement with two
+NL descriptions becomes two training rows. Planned only -- not implemented.
+
 ## Known wrinkle
 
 `a1_run.slurm` keeps `--job-name=mv3_qwen8b` from `run_v3.slurm`, so both arms
