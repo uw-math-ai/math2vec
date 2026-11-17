@@ -29,7 +29,8 @@ becomes two explicit training examples rather than two random draws.
 
 It uses the same A1 dataset. No new data is involved.
 
-**Open questions:** see §10 — Q1 (in-batch false negatives) is blocking.
+**Open questions:** see §10. Nothing is blocking; Q3 (implicit reweighting) is
+the one that most deserves attention.
 **Depends on:** the 2-arm comparison finishing, so this has a baseline.
 **Author's note:** written 2026-11-16, at the end of the A1 setup session.
 
@@ -77,26 +78,33 @@ For a concept with `n` views, rows go from 1 to `C(n, 2)`.
 It is a reasonable hypothesis, but there are three concrete ways it can lose.
 Design around them or the run is wasted.
 
-### 3.1 In-batch false negatives — the serious one
+### 3.1 In-batch false negatives — real, but quantified as negligible
 
-`CachedMultipleNegativesRankingLoss` treats **every other item in the batch as a
-negative**. If two rows from the *same concept* land in the same batch, the loss
-explicitly pushes apart two descriptions of the same theorem. That is a direct
-training signal *against* what we want.
+`CachedMultipleNegativesRankingLoss` treats every other item in the batch as a
+negative. If two rows from the *same concept* land in one batch, the loss pushes
+apart two descriptions of the same theorem — a gradient directly against the
+objective.
 
-Today this is nearly impossible: one row per concept means a concept cannot
-collide with itself. Under explicit enumeration a concept occupies up to `C(n,2)` rows, so
-collisions become likely — and worse, consecutive rows from the same concept
-will sit in the same batch unless shuffling separates them.
+Today this is impossible: one row per concept means a concept cannot collide
+with itself. Explicit enumeration makes it possible. **But at this batch size it
+is rare enough to ignore:**
 
-**Mitigation (required, not optional):** guarantee no two rows of the same
-concept share a batch. Either
-  * a custom `BatchSampler` that is concept-aware, or
-  * `sentence_transformers` `BatchSamplers.NO_DUPLICATES`, which exists for
-    exactly this — but note the trainer uses the legacy `model.fit()` API, so
-    check whether that path accepts a batch sampler before assuming it works.
-    If it does not, `model.fit()` may have to be replaced with
-    `SentenceTransformerTrainer`, which is a much larger change.
+```
+rows (enumerated)          149,002      batches/epoch   9,313
+P(two given rows collide)  1.01e-04     batch_size      16
+P(a merged concept collides) 3.02e-04
+expected collisions/epoch  4.4          = 0.047% of batches
+```
+
+Roughly 4 affected batches per epoch out of 9,313. This was initially written up
+as blocking; the arithmetic says it is not. No concept-aware batch sampler is
+required, and no migration off `model.fit()` is needed on these grounds.
+
+Two caveats worth keeping: the estimate assumes a uniform shuffle (verify rows
+of one concept are not left adjacent in the dataset before shuffling), and it
+scales with batch size — raising `--batch_size` well above 16, or using
+GradCache to make the effective negative pool much larger, would make this
+matter again.
 
 ### 3.2 Implicit reweighting
 
@@ -212,27 +220,24 @@ Account is `mathai`; QOS available: `debug`, `interactive`, `normal`.
 
 ## 10. Open questions
 
-Nothing here is settled. Q1-Q4 are design questions for this proposal; Q5-Q9 came out of the A1 session
+Nothing here is settled. Q1-Q4 are design questions for this proposal (Q1 is now resolved); Q5-Q9 came out of the A1 session
 and apply to the project generally. **Deferred by decision: revisit after the
 first multi-arm run (paper vs A1) completes** — the results may answer or
 reprioritise several of them.
 
-### Q1. Can `model.fit()` take a no-duplicates batch sampler? **BLOCKING for this proposal**
+### Q1. In-batch false negatives — resolved as negligible, not blocking
 
-`CachedMultipleNegativesRankingLoss` uses in-batch negatives. Under explicit
-pair enumeration a concept occupies several rows, so two rows of the same
-concept can share a batch — training the model to push apart two descriptions
-of the same theorem. See §3.1.
+Measured, not assumed: with `batch_size=16` and ~149,002 enumerated rows, two
+rows of one concept share a batch about **4.4 times per epoch out of 9,313
+batches (0.047%)**. See §3.1 for the arithmetic.
 
-Unknown: whether the legacy `model.fit()` path accepts a batch sampler at all.
-`sentence_transformers` 5.1.2 ships `BatchSamplers.NO_DUPLICATES`, but it is
-wired to `SentenceTransformerTrainer`, not `fit()`. If `fit()` cannot take one,
-this proposal needs either a custom pre-shuffled ordering that guarantees separation, or a
-migration to `SentenceTransformerTrainer` — a much larger change that would also
-alter the paper recipe's training loop.
+**Consequence:** no concept-aware batch sampler is needed, and the question of
+whether the legacy `model.fit()` path accepts `BatchSamplers.NO_DUPLICATES` is
+moot. The feared migration to `SentenceTransformerTrainer` is not required.
 
-*Resolve by:* reading the installed `sentence_transformers` source on Tillicum
-before writing any implementation code. Cheap, no GPU.
+Revisit only if `--batch_size` rises substantially above 16, or if the effective
+negative pool grows (e.g. GradCache across mini-batches). Also confirm the
+dataset is uniformly shuffled, so a concept's rows are not left adjacent.
 
 ### Q2. Pair scope: all `C(n,2)` pairs, or cross-modal `(NL, Lean)` only?
 
@@ -241,11 +246,27 @@ adds NL↔NL pairs, which §8 argues may be the most valuable part of A1 (teachi
 the model that verbose LaTeX prose and a terse docstring describe the same
 theorem). Recommended: cross-modal default, all-pairs as an ablation.
 
-### Q3. Cap on rows per concept
+### Q3. Implicit reweighting — the question that actually matters
 
-Needed to bound the implicit reweighting in §3.2. Suggested
-`--max_pairs_per_concept 4`, but the value is a guess. Depends on the view-count
-distribution across the base data, which nobody has measured yet.
+Enumeration is not a neutral change in coverage; it is a **3x upweighting** of
+every concept that gained a second NL view:
+
+```
+merged concepts          14,501   = 12.1% of train concepts
+rows they contribute     43,503   = 29.2% of all training rows
+```
+
+So 12.1% of concepts would supply 29.2% of the training signal — and which
+theorems get that boost is arbitrary. It tracks *which ones happened to have a
+Mathlib docstring*, not which ones are important or hard. That could help
+(docstring-bearing theorems may be better documented and more central) or skew
+the model toward a lopsided slice of Mathlib. Untested either way.
+
+Mitigation: `--max_pairs_per_concept N` to cap rows. `N` is a guess until the
+view-count distribution across the base data is measured, which nobody has done.
+
+Cost note: enumeration is **1.24x the steps**, so ~10.3 h and ~$9.28 per arm
+instead of 8.3 h and ~$7.50.
 
 ### Q4. Epoch-matched or step-matched comparison?
 
@@ -325,13 +346,14 @@ help is untested and orthogonal to this proposal.
 > to emit one row per view pair instead, so a Lean statement with two different
 > NL descriptions becomes two explicit training examples.
 >
-> Before writing code, tell me how you'll handle in-batch false negatives —
-> `CachedMultipleNegativesRankingLoss` uses in-batch negatives, so two rows from
-> the same concept in one batch would train the model to push apart two
-> descriptions of the same theorem. Sections 3.1 and 10 (Q1) of the plan cover this; Q1 is marked blocking. Check
-> whether the legacy `model.fit()` path can take a no-duplicates batch sampler,
-> and if it can't, tell me what switching to `SentenceTransformerTrainer` costs
-> before you start.
+> Two things already settled, so don't re-derive them. In-batch false negatives
+> were measured and are negligible at batch 16 (~4.4 collisions per epoch out of
+> 9,313 batches, 0.047%) — see §3.1 and Q1. No concept-aware batch sampler is
+> needed and no migration off `model.fit()` is required. The real design question
+> is Q3: enumeration is a 3x upweighting of merged concepts, so 12.1% of concepts
+> would supply 29.2% of training rows. Tell me how you want to handle that — a
+> cap via `--max_pairs_per_concept`, or accept the reweighting — before writing
+> code.
 >
 > Then:
 > 1. Implement it behind `--explicit_view_pairs`, `--explicit_pairs_cross_modal`
