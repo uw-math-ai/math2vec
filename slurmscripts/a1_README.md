@@ -34,6 +34,10 @@ step 1 and add `--account=<account>` to the `sbatch` line. No script sets
 | `a1_setup_login.sh` | none (login node) | orient, workspace, conda env, data + overlap check, model cache |
 | `a1_smoke.slurm` | `debug` | 0.6B / 2k rows / 1 epoch sanity check |
 | `a1_run.slurm` | `normal` | paper recipe on Qwen3-Embedding-8B; `RUN` and `EXTRA` select the arm |
+| `a1_collect.sh` | none (login node) | wall time, GPU-hours, `[extra]` counts; `--archive` copies results to the project folder |
+| `a1_report.py` | none (CPU) | builds the comparison tables from `metrics.json` |
+| `a1_eval_checkpoint.py` | - | optional re-eval, imports the trainer's own eval functions |
+| `a1_eval.slurm` | `normal` | GPU wrapper for `a1_eval_checkpoint.py` |
 
 ## How EXTRA is folded in
 
@@ -59,6 +63,75 @@ A1 supplies only `nl_informal` and `lean_signature`. It has no `lean_type` or
 `nl_informal_2`, so it can only move pair types 1 (NL -> Lean signature) and
 6 (Lean signature -> NL informal). Expect types 2-5 to be roughly flat --
 that is the data shape, not a bug.
+
+## Getting the results after the job finishes
+
+The trainer evaluates the **base model and the fine-tuned model itself** and
+writes both into `checkpoints/<RUN>/metrics.json`. You do not need to run a
+separate eval for the primary comparison.
+
+```bash
+cd /gpfs/scrubbed/$USER/mathlib-ft
+
+# 1. is it done?
+squeue -u $USER -o '%.10i %.14j %.8T %.10M %.6D %R'
+grep -l "RUN=mv3_qwen8b_a1_ep2" logs/*.out     # both arms share the job name
+tail -f logs/mv3_qwen8b_*.out
+
+# 2. wall time, GPU-hours, [extra] counts -> writes runinfo.json
+bash repo/slurmscripts/a1_collect.sh mv3_qwen8b_a1_ep2
+
+# 3. the tables (CPU, instant)
+python repo/slurmscripts/a1_report.py checkpoints/mv3_qwen8b_a1_ep2
+
+# 4. once the baseline arm also finishes, the real comparison
+python repo/slurmscripts/a1_report.py \
+  checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_a1_ep2
+
+# 5. markdown for the writeup
+python repo/slurmscripts/a1_report.py --markdown \
+  checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_a1_ep2 > results.md
+
+# 6. archive to the backed-up project folder (scratch is purged after 60 days)
+bash repo/slurmscripts/a1_collect.sh --archive \
+  mv3_qwen8b_a1_ep2 mv3_qwen8b_paper_ep2
+```
+
+`a1_report.py` prints a **dev-set identity check** first: both arms must show the
+same `concepts_total` / `train` / `dev` / `n_dev_used` / `corpus_size`. If they
+do not, it says so loudly and the cross-run comparison is invalid -- that is the
+one result worth checking before you believe any delta.
+
+### Optional: re-eval a saved model on a GPU
+
+`a1_eval_checkpoint.py` + `a1_eval.slurm` re-run the eval against a saved model,
+importing `eval_retrieval` / `eval_all_pair_types` / `group_split_records` from
+the trainer so numbers stay comparable. Only needed for a mid-training
+checkpoint, a different `k`, a different concept file, or a run that died after
+training but before eval.
+
+```bash
+sbatch --export=ALL,RUN=mv3_qwen8b_a1_ep2 a1_eval.slurm
+sbatch --export=ALL,RUN=mv3_qwen8b_a1_ep2,PRIMARY_ONLY=1 a1_eval.slurm
+```
+
+The split is reproducible because `group_split_records` shuffles the sorted
+module list with `random.Random(seed)`, so the same data + seed + dev_frac +
+max_rows always gives the same dev set. `EXTRA` is applied after the split and
+never changes it.
+
+## Known wrinkle
+
+`a1_run.slurm` keeps `--job-name=mv3_qwen8b` from `run_v3.slurm`, so both arms
+log to `logs/mv3_qwen8b_<jobid>.out` and cannot be told apart by filename.
+`a1_collect.sh` resolves the right log by grepping for the `RUN=` line the
+script echoes. To avoid the ambiguity on future submissions, override the name:
+
+```bash
+sbatch --job-name=mv3_qwen8b_a1_ep2 \
+  --export=ALL,RUN=mv3_qwen8b_a1_ep2,EXTRA=data/a1_kept_concepts_v4.19.0.jsonl \
+  a1_run.slurm
+```
 
 ## Monitoring
 
