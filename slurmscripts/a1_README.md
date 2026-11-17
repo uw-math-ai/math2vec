@@ -6,6 +6,17 @@ against the paper baseline on an identical dev set.
 
 Target: Tillicum (UW Hyak), NVIDIA H200, Slurm.
 
+**This is the current experiment: a 2-arm comparison.**
+
+| Arm | RUN | Trains on |
+|---|---|---|
+| Paper baseline | `mv3_qwen8b_paper_ep2` | MathlibViews.jsonl (133,621 concepts) |
+| + A1 docstrings | `mv3_qwen8b_a1_ep2` | MathlibViews.jsonl **+ A1 added to training only** |
+
+Both start from stock `Qwen/Qwen3-Embedding-8B`, use the identical recipe, and
+share a byte-identical dev set. The only difference is the extra training data,
+which is what makes the comparison mean anything. ~8.3 h and ~$7.50 per arm.
+
 ## Run order
 
 ```bash
@@ -120,11 +131,12 @@ module list with `random.Random(seed)`, so the same data + seed + dev_frac +
 max_rows always gives the same dev set. `EXTRA` is applied after the split and
 never changes it.
 
-## Follow-on experiment
+## Possible follow-on
 
-`a1_trainingrun2_PLAN.md` plans training run 2 on the same A1 dataset: enumerate view pairs explicitly
-instead of sampling two views at random per epoch, so a Lean statement with two
-NL descriptions becomes two training rows. Planned only -- not implemented.
+`PROPOSAL_explicit_view_pairs.md` sketches a *possible later* run on this same
+A1 dataset: enumerate view pairs explicitly instead of sampling two views at
+random per epoch. **An idea only -- not solidified, not scheduled, and not the
+run described above.**
 
 ## Known wrinkle
 
