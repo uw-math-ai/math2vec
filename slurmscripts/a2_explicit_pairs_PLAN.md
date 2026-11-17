@@ -1,6 +1,7 @@
 # A2 — Explicit view-pair enumeration
 
 **Status:** planned, not implemented. Nothing here has been run.
+**Open questions:** see §10 — Q1 (in-batch false negatives) is blocking.
 **Depends on:** the A1 run (`a1_README.md`) finishing, so A2 has a baseline.
 **Author's note:** written at the end of the A1 setup session, 2026-11-16.
 
@@ -181,9 +182,110 @@ Account is `mathai`; QOS available: `debug`, `interactive`, `normal`.
 * Eval is 6 pair types; A1/A2 data only has `nl_informal` + `lean_signature`, so
   only pair types 1 and 6 can move. Types 2-5 stay flat by construction.
 
+## 10. Open questions
+
+Nothing here is settled. Q1-Q4 are A2 design; Q5-Q9 came out of the A1 session
+and apply to the project generally. **Deferred by decision: revisit after the
+first multi-arm run (paper vs A1) completes** — the results may answer or
+reprioritise several of them.
+
+### Q1. Can `model.fit()` take a no-duplicates batch sampler? **BLOCKING for A2**
+
+`CachedMultipleNegativesRankingLoss` uses in-batch negatives. Under explicit
+pair enumeration a concept occupies several rows, so two rows of the same
+concept can share a batch — training the model to push apart two descriptions
+of the same theorem. See §3.1.
+
+Unknown: whether the legacy `model.fit()` path accepts a batch sampler at all.
+`sentence_transformers` 5.1.2 ships `BatchSamplers.NO_DUPLICATES`, but it is
+wired to `SentenceTransformerTrainer`, not `fit()`. If `fit()` cannot take one,
+A2 needs either a custom pre-shuffled ordering that guarantees separation, or a
+migration to `SentenceTransformerTrainer` — a much larger change that would also
+alter the paper recipe's training loop.
+
+*Resolve by:* reading the installed `sentence_transformers` source on Tillicum
+before writing any A2 code. Cheap, no GPU.
+
+### Q2. Pair scope: all `C(n,2)` pairs, or cross-modal `(NL, Lean)` only?
+
+Cross-modal only keeps the objective aligned with the NL→Lean eval. All-pairs
+adds NL↔NL pairs, which §8 argues may be the most valuable part of A1 (teaching
+the model that verbose LaTeX prose and a terse docstring describe the same
+theorem). Recommended: cross-modal default, all-pairs as an ablation.
+
+### Q3. Cap on rows per concept
+
+Needed to bound the implicit reweighting in §3.2. Suggested
+`--max_pairs_per_concept 4`, but the value is a guess. Depends on the view-count
+distribution across the base data, which nobody has measured yet.
+
+### Q4. Epoch-matched or step-matched comparison?
+
+Steps per epoch scale with pair count, so "2 epochs" stops meaning what it meant
+in the paper recipe. Recommended: run epoch-matched and record total steps, so a
+step-matched reading stays possible after the fact.
+
+### Q5. What are the 7,562 duplicate `concept_id`s in the base data?
+
+`MathlibViews.jsonl` has 133,621 rows but 126,059 unique `concept_id`s. Unknown
+whether `load_concepts` dedupes, merges views, or keeps both rows — and
+therefore whether some concepts are silently upweighted in the paper recipe
+itself. Pre-existing, not introduced by A1, but it affects how pair counts are
+computed in A2.
+
+*Resolve by:* reading `load_concepts` and counting, no GPU.
+
+### Q6. Do uninformative A1 docstrings need filtering?
+
+Some Mathlib docstrings name a theorem rather than state it, e.g.
+`MeasureTheory.condExp_mul_of_stronglyMeasurable_left` → *"Pull-out property of
+the conditional expectation."* That is weak training signal and, as an NL
+anchor, close to unlearnable. The A1 metadata carries `filter_label: KEEP` and
+`doc_slip_flag`, which suggests some filtering already happened, but we never
+checked what those fields mean or how many short docstrings survived.
+
+*Resolve by:* length distribution over A1 `nl_informal`, plus inspecting what
+`doc_slip_flag` was computed from. No GPU.
+
+### Q7. Does the eval register mismatch cap the measurable benefit?
+
+Dev queries come from the base data — verbose LaTeX prose. A1 docstrings are
+terse with Lean notation, and A1 is training-only, so it never appears in dev.
+The model may genuinely improve at docstring-style retrieval while the eval,
+which only asks LaTeX-style questions, shows nothing.
+
+If A1 comes back flat, this is the first hypothesis to test — not "the data is
+bad." Would need a held-out docstring-style eval set, which does not exist yet
+and would have to come out of the dev modules to stay honest.
+
+### Q8. Should A1 concepts get `lean_type` and `nl_informal_2` views?
+
+The eval suite has 6 pair types, but A1 supplies only `nl_informal` and
+`lean_signature`, so pair types 2-5 are flat by construction. Generating the
+missing views for A1 concepts would make the full suite meaningful — at the cost
+of synthesising data, which changes what the experiment is testing.
+
+### Q9. Are hard negatives a missed opportunity for A1?
+
+`a1_kept_concepts_v4.19.0.jsonl` has empty `hard_negatives.nl` / `.lean` arrays,
+and the paper recipe disables the hard-negative loader anyway
+(`--n_hard_negs 1000`). Whether mining hard negatives for the A1 concepts would
+help is untested and orthogonal to A2.
+
+### Resolved during the A1 session (recorded so they are not re-litigated)
+
+* Slurm account is `mathai`; QOS `debug`, `interactive`, `normal` all available.
+* `--partition` is not needed on Tillicum and is omitted from all scripts.
+* A1 docstrings are not restatements: 0 byte-identical of 14,501 overlapping,
+  median similarity 0.129, near-duplicate share 0.1%. Experiment is well-posed.
+* Training is a **full** fine-tune of all 8B parameters — no LoRA, no PEFT, no
+  frozen layers.
+* `--extra_train_jsonl` leaves the dev set byte-identical, verified by the smoke
+  test and enforced by `a1_report.py`'s dev-set identity check.
+
 ---
 
-## 9. Prompt to paste into a new Claude Code session
+## 11. Prompt to paste into a new Claude Code session
 
 > I'm on the Math2Vec project (UW Math AI Lab), working in the `math2vec` repo on
 > branch `trainingdata-mathlibdocstring`. Read
@@ -198,7 +300,7 @@ Account is `mathai`; QOS available: `debug`, `interactive`, `normal`.
 > Before writing code, tell me how you'll handle in-batch false negatives —
 > `CachedMultipleNegativesRankingLoss` uses in-batch negatives, so two rows from
 > the same concept in one batch would train the model to push apart two
-> descriptions of the same theorem. Section 3.1 of the plan covers this. Check
+> descriptions of the same theorem. Sections 3.1 and 10 (Q1) of the plan cover this; Q1 is marked blocking. Check
 > whether the legacy `model.fit()` path can take a no-duplicates batch sampler,
 > and if it can't, tell me what switching to `SentenceTransformerTrainer` costs
 > before you start.
