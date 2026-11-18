@@ -1,0 +1,10 @@
+{
+  "anchors_with_variants": 324,
+  "ambiguous_variants": 0,
+  "skipped_no_positive": 60,
+  "skipped_no_negative": 0,
+  "queries": 264,
+  "documents": 2877,
+  "positives": 863,
+  "negatives": 2014
+}
