@@ -1,0 +1,5 @@
+negative_class,pairs,equivalent_ranked_higher
+contradictory,993,0.9446
+entailed,1012,0.4279
+graded,4263,0.2985
+all,6268,0.4217
