@@ -458,6 +458,22 @@ class TestServerProtocol:
         finally:
             srv.close()
 
+    def test_subprocess_timeout_is_an_error(self, tmp_path, monkeypatch) -> None:
+        import subprocess
+
+        from wiggle import lean_runner
+
+        monkeypatch.setattr(lean_runner, "get_project_root", lambda: tmp_path)
+
+        def boom(*args, **kwargs):
+            raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout", 60))
+
+        monkeypatch.setattr(lean_runner.subprocess, "run", boom)
+        out = lean_runner._run_lean_subprocess("example : True := by trivial", timeout=60)
+        assert out.startswith("error:")
+        assert "timed out after 60s" in out
+        assert list(tmp_path.glob("_wiggle_*.lean")) == []
+
     def test_timeout_raises_lean_server_crash(self, tmp_path) -> None:
         proc = _FakeLeanProcess()
         # Warmup succeeds via the default waitForDiagnostics handler.

@@ -110,13 +110,23 @@ def _run_lean_subprocess(code: str, timeout: int) -> str:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(code)
-        result = subprocess.run(
-            ["lake", "env", "lean", path],
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+        try:
+            result = subprocess.run(
+                ["lake", "env", "lean", path],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            # A slow aesop/grind attempt is "not a proof", not a failed job.
+            # Callers treat any `error:` line as failure (`_proves`, `compile_lean`).
+            tail = "".join(
+                chunk if isinstance(chunk, str) else chunk.decode("utf-8", "replace")
+                for chunk in (exc.stdout, exc.stderr)
+                if chunk
+            )
+            return f"error: lean timed out after {timeout}s\n{tail}"
         return result.stdout + result.stderr
     finally:
         try:

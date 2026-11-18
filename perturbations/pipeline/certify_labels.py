@@ -248,7 +248,12 @@ def main() -> int:
             finished, _ = wait(pending, timeout=timeout, return_when=FIRST_COMPLETED)
             for fut in finished:
                 aid = pending.pop(fut)
-                rows = fut.result()
+                try:
+                    rows = fut.result()
+                except Exception as exc:
+                    print(f"  {aid}: worker failed ({type(exc).__name__}: {exc}); "
+                          f"left for --resume", flush=True)
+                    continue
                 done[aid] = rows
                 for r in rows:
                     fh.write(json.dumps(r, ensure_ascii=False) + "\n")
