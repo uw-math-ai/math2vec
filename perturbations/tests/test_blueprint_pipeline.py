@@ -272,3 +272,24 @@ def test_plot_eval_writes_figures_from_a_run_dir(tmp_path: Path) -> None:
         "pairwise_by_negative.png", "cosine_by_class.png", "cosine_by_perturbation.png",
     }
     assert "| org/model | 0.5000 | 0.4000 |" in (figs / "summary.md").read_text()
+
+
+def test_full_mathlib_anchors_keep_theorems_and_stable_ids(tmp_path: Path) -> None:
+    prep = _load("prepare_mathlib_full_anchors")
+    rows = [
+        {"index": 7, "kind": "theorem", "name": ["Nat", "add_comm"],
+         "module_name": ["Mathlib", "Algebra", "Group"], "type": "∀ (n m : Nat), n + m = m + n"},
+        {"index": 8, "kind": "def", "name": "Nat.zero", "module_name": "Mathlib", "type": "Nat"},
+        {"index": 9, "kind": "lemma", "name": "sorryLemma", "module_name": "Mathlib", "type": "sorry = sorry"},
+        {"index": 10, "kind": "lemma", "name": "_private", "module_name": "Mathlib", "type": "True"},
+    ]
+    src = tmp_path / "data.jsonl"
+    src.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    out = tmp_path / "anchors.jsonl"
+    assert prep.write_anchors(prep.iter_jsonl(src), out, limit=None) == 1
+    anchor = json.loads(out.read_text(encoding="utf-8"))
+    assert anchor["id"] == "mathlib_7"
+    assert anchor["declaration"] == "Nat.add_comm"
+    assert anchor["module"] == "Mathlib.Algebra.Group"
+    assert anchor["type_str"].startswith("∀")
+    assert anchor["pair_ids"] == ["mathlib:7"]

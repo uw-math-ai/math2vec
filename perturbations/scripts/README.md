@@ -18,6 +18,7 @@ Lean tests (`WIGGLE_RUN_LEAN_INTEGRATION=1`, see
 | `tillicum_setup.sh` | One-time Tillicum login-node setup: elan, conda env from `requirements.txt`, prebuilt Mathlib cache, all under `/gpfs/projects/mathai/$USER`. |
 | `tillicum_tests.slurm` | Runs the test suites on Tillicum (build, mocked pytest, live-Lean pytest, typeclass smoke, demo run, optional benchmark review). See [`docs/TILLICUM_SETUP.md`](../docs/TILLICUM_SETUP.md). |
 | `tillicum_env.sh` | Shared paths + conda activation, sourced by the two Tillicum scripts. |
+| `tillicum_mathlib_full.slurm` | Future job: perturb and certify the full Mathlib informal corpus, then train. Resumable; training waits until both earlier phases finish. |
 
 ### Benchmarking
 
