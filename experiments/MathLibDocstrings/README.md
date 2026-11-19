@@ -291,6 +291,33 @@ same `nl_informal` slot as the base data's verbose LaTeX prose (§2). The result
 the only register this benchmark ever asks in — while `nl_informal` as a
 retrieval *target* held up or improved slightly (+0.0050 from Lean signatures).
 
+**Full per-pair-type detail, stock vs each fine-tuned arm.** Both arms are
+measured against the same stock model, so the "gain" columns show how much
+fine-tuning bought on each pair type.
+
+| Pair type | n_dev | Stock R@1 | Paper R@1 (gain) | +Docs R@1 (gain) |
+|---|---|---|---|---|
+| NL → Lean signature (PRIMARY) | 15,287 | 0.7517 | 0.8592 (+0.1075) | 0.8511 (+0.0994) |
+| NL → Lean type | 15,287 | 0.6409 | 0.8078 (+0.1669) | 0.7870 (+0.1461) |
+| NL rephrasing → Lean signature | 13,085 | 0.6936 | 0.8118 (+0.1182) | 0.8135 (+0.1198) |
+| NL rephrasing → NL informal | 13,085 | 0.8539 | 0.9224 (+0.0686) | 0.9220 (+0.0681) |
+| Lean type → Lean signature | 15,287 | 0.6753 | 0.8009 (+0.1255) | 0.8048 (+0.1295) |
+| Lean signature → NL informal | 15,287 | 0.6558 | 0.8520 (+0.1962) | 0.8570 (+0.2012) |
+
+| Pair type | Stock MRR@10 | Paper MRR@10 (gain) | +Docs MRR@10 (gain) |
+|---|---|---|---|
+| NL → Lean signature (PRIMARY) | 0.8406 | 0.9148 (+0.0741) | 0.9099 (+0.0693) |
+| NL → Lean type | 0.7361 | 0.8694 (+0.1333) | 0.8559 (+0.1198) |
+| NL rephrasing → Lean signature | 0.7931 | 0.8820 (+0.0888) | 0.8830 (+0.0899) |
+| NL rephrasing → NL informal | 0.9123 | 0.9553 (+0.0430) | 0.9551 (+0.0428) |
+| Lean type → Lean signature | 0.7554 | 0.8581 (+0.1027) | 0.8595 (+0.1041) |
+| Lean signature → NL informal | 0.7650 | 0.9128 (+0.1478) | 0.9155 (+0.1505) |
+
+Worth noting: on the **reverse** direction (Lean signature → NL informal) the
+MathLibDocstrings arm gains *more* from fine-tuning than the paper arm
+(+0.2012 vs +0.1962 R@1). Adding a second NL register made `nl_informal` a
+richer retrieval target even as it became a slightly weaker query.
+
 ### 9.6 Per-pair-type contrastive loss, fine-tuned (lower is better)
 
 | Pair type | Paper | + MathLibDocstrings | Δ |
