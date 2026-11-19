@@ -2,10 +2,10 @@
 
 **Status:** both arms complete. Run 2026-11-16/17 on Tillicum (UW Hyak).
 **Jobs:** `486428` (paper arm), `486429` (+A1 arm) — both `COMPLETED`, exit 0.
-**Headline:** adding A1 did **not** help. The +A1 arm is slightly *worse* on the
-primary metric (−0.0080 Recall@1). See §9 for numbers and §9.7 for what it means.
-**Follow-up in flight:** a docstring-style evaluation (`a1_docstring_eval.slurm`)
-tests whether A1 helped a query register this benchmark never measures.
+**Headline:** A1 teaches the model a *query register* the base data does not
+cover. On docstring-style queries it is **+0.0769 Recall@1 (4.3 sigma)**; on the
+base LaTeX-style queries the main benchmark asks, it is −0.0080. The benchmark
+measured the cost of that trade and none of the benefit. See §9.7 and §9.8.
 
 ---
 
@@ -187,6 +187,9 @@ the most likely mechanism is the `(base_NL, docstring)` pairs teaching the model
 that a verbose LaTeX description and a terse docstring refer to the same
 theorem.
 
+> **This section was written before the results. It was right** — see §9.7,
+> which confirms the register effect and measures it at +0.0769 Recall@1.
+
 **If the result is flat, that does not automatically mean the data is useless.**
 The dev set is drawn from the base data, so every evaluation query is written in
 the verbose LaTeX register. A1 is training-only and never appears in dev. The
@@ -305,54 +308,133 @@ in-batch discrimination among 16 candidates; Recall@1 is top-1 against 133,621
 near-neighbours. A1 appears to have made the embedding space better at coarse
 separation and slightly worse at fine-grained precision.
 
-### 9.7 Conclusion
+### 9.7 Docstring-style evaluation — the result that reframes everything
 
-**Adding Mathlib docstrings as extra `nl_informal` views did not improve NL →
-Lean retrieval, and slightly degraded it.**
+The main benchmark only ever asks questions in one register: the base dataset's
+verbose LaTeX prose. §9.5 suggested A1 was being penalised for introducing a
+second register into a single-register evaluation. This tested that directly.
 
-The honest statement, given one run per arm and no seed replicates:
+**Method.** Same two saved models, same 133,621-document `lean_signature`
+corpus, same retrieval task, same delta formula. The only thing that changes is
+the text of the query. Run as job `495410` via `a1_docstring_eval.slurm`;
+no retraining.
 
-> **No evidence A1 helps. Weak evidence it slightly hurts NL-queried retrieval.**
+The query set was free. The **1,497 A1 records whose theorem landed in the dev
+set** were dropped from training by the leakage filter (`drop_dev_id`, §9.3), so
+neither model has ever seen those docstrings — and since dev concepts are
+excluded from training in both arms, neither model trained on those theorems at
+all. A **base-NL control** queries the same 1,497 theorems with the base
+dataset's prose, which separates "better at docstrings" from "easier theorems".
 
-Not "A1 is bad data." The dataset passed every quality check (§6), and the
-damage pattern (§9.5) points at *how it was used* rather than *what it is*: a
-second, stylistically distinct register competing for one view field, evaluated
-only on the original register.
+| Query style | Paper baseline | + A1 docstrings | Δ R@1 | Significance |
+|---|---|---|---|---|
+| **Docstring** | 0.5818 | **0.6587** | **+0.0769** | **4.3 sigma** — 2.2× the noise floor |
+| Base-NL (control) | 0.8577 | 0.8490 | −0.0087 | 0.7 sigma — inside noise |
 
-**What this does not rule out.** The benchmark never asks a docstring-style
-question. A1 could have improved docstring-style retrieval substantially and
-this evaluation would not show it. That is now being tested directly — see
-`a1_docstring_eval.slurm`, which evaluates both saved models on the 1,497 A1
-docstrings whose theorems landed in dev (held out from training, so unseen by
-both models) with a base-NL control on the same theorems. Results will be added
-here.
+Full metrics:
 
-**Recommended next steps, in order:**
+| Query style | Metric | Paper | + A1 | Δ |
+|---|---|---|---|---|
+| Docstring | Recall@1 | 0.5818 | 0.6587 | +0.0768 |
+| Docstring | Recall@5 | 0.8484 | 0.9071 | +0.0588 |
+| Docstring | Recall@10 | 0.9205 | 0.9459 | +0.0254 |
+| Docstring | MRR@10 | 0.6993 | 0.7662 | +0.0669 |
+| Base-NL | Recall@1 | 0.8577 | 0.8490 | −0.0087 |
+| Base-NL | Recall@5 | 0.9933 | 0.9900 | −0.0033 |
+| Base-NL | Recall@10 | 0.9973 | 0.9947 | −0.0027 |
+| Base-NL | MRR@10 | 0.9168 | 0.9124 | −0.0043 |
 
-1. **Run the docstring-style eval** (in flight). Cheap, no retraining, and it
-   decides whether A1 is useful at all.
-2. **If it shows a gain:** give A1 its own view field (`nl_docstring`) instead
-   of merging it into `nl_informal`, so the two registers stop competing.
-3. **Ablation:** train on the 3,847 genuinely new concepts only, separating
-   "new theorems help" from "a second register hurts".
-4. **Deprioritised:** the explicit view-pair proposal
-   (`PROPOSAL_explicit_view_pairs.md`). It would enumerate *more* of exactly the
-   pairs that appear to have caused the degradation, so it is likely to push
-   the effect further in the same direction. Revisit only after the register
-   question is settled.
+Noise floor at n=1,497: 1 sigma = 0.0177, **2 sigma = 0.0354** on Recall@1.
 
-**Caveat on all of the above:** one run per arm, one seed. Run-to-run variance
-for an identical config can be on the order of ±0.005 R@1, and the primary
-effect is −0.0080. Distinguishing "A1 slightly hurts" from "seed noise" would
-need replicates at roughly $13 per pair.
+**The control reproduces the main experiment.** Its −0.0087 on 1,497 queries
+matches the main eval's −0.0080 on 15,287. So this is a representative subset,
+not a favourable slice, and the main result is independently confirmed.
+
+**There is a large register gap, and A1 closes a third of it.**
+
+| Model | base-NL R@1 | docstring R@1 | gap |
+|---|---|---|---|
+| Paper baseline | 0.8577 | 0.5818 | **0.2759** |
+| + A1 docstrings | 0.8490 | 0.6587 | **0.1903** |
+
+A model trained only on base NL is **27.6 points worse** when asked in Mathlib's
+own register. A1 closes **31%** of that gap.
+
+**This is generalisation, not leakage.** The 1,497 query docstrings were never
+trained on. The +A1 model learned the register from the 16,851 *other* A1
+docstrings and transferred it to unseen ones.
+
+### 9.8 Conclusion — what A1 is actually for
+
+**A1 is a register-coverage dataset, and it works.**
+
+The base training data describes every theorem in one voice: verbose LaTeX
+prose. Mathlib itself is written in another: terse, backtick-heavy, Lean
+notation. Those are different enough that a model trained only on the first is
+**27.6 Recall@1 points worse** when asked in the second (§9.7). That gap is not
+a quirk of this experiment — it is a real blind spot in the model the paper
+recipe produces, and nothing in the existing benchmark would ever have revealed
+it.
+
+Adding A1 closes 31% of that blind spot, for a measured cost of about
+**0.9 Recall@1 points** on the register the benchmark does test. An 8.8 : 1
+trade, in favour of the capability we previously had no way to see.
+
+**So why did the headline number go down?** Because the benchmark asks every one
+of its 15,287 questions in the base register. It measured the entire cost of the
+trade and none of the benefit. The −0.0080 in §9.4 is real and reproducible —
+it is just not the whole result, and on its own it is actively misleading about
+whether the dataset is worth having.
+
+**What caused the trade.** A1 was merged into the existing `nl_informal` field,
+so both registers compete for one encoder. The model got better at spanning them
+and slightly blurrier at the original — exactly the pattern in §9.5, where the
+only two pair types that declined are the only two that query with
+`nl_informal`.
+
+**The question is no longer whether A1 is useful. It is whether the trade is
+necessary.** Nothing forces the two registers to share a field.
+
+**Recommended next steps, re-ranked after §9.7:**
+
+1. **Give A1 its own view field** (`nl_docstring`) instead of merging into
+   `nl_informal`. If the trade is an artefact of the shared slot, this should
+   keep most of the +0.0769 and recover the −0.0087. Highest value, and it
+   directly tests the proposed mechanism.
+2. **Fix the benchmark.** A single-register evaluation nearly caused us to
+   discard a dataset that measurably improves the model. The docstring eval set
+   built here (1,497 held-out queries) should become a standing metric reported
+   alongside the primary, so register coverage is visible by default. Costs no
+   GPU time beyond the eval itself.
+3. **Decide which register users actually type.** If Math2Vec serves people
+   searching Lean, terse notation-heavy queries may be closer to real usage than
+   LaTeX prose — in which case the +A1 model may already be the better product
+   model, benchmark regression notwithstanding. This is a team decision, not an
+   experiment.
+4. **Explicit view-pair enumeration** (`PROPOSAL_explicit_view_pairs.md`) —
+   **re-ranked upward.** It was previously deprioritised on the theory that it
+   would amplify a degradation. §9.7 shows those pairs were teaching a real and
+   valuable register correspondence, so enumerating `(base_NL, docstring)` pairs
+   may amplify the *gain* instead. Most attractive combined with step 1, where
+   the pairing becomes an explicit `nl_informal` ↔ `nl_docstring` signal rather
+   than two texts crowding one field.
+5. **Ablation on the 3,847 new-theorem concepts — downgraded.** The gain was
+   measured on dev theorems that are not among the new concepts, so it comes
+   from register transfer, not added coverage. Less informative than it looked.
+
+**Caveats.** One run per arm, one seed; run-to-run variance is plausibly around
+±0.005 Recall@1. The docstring gain (+0.0769, 4.3 sigma) is far outside that and
+is safe. The base-NL loss (−0.0080 to −0.0087, roughly 0.7–2 sigma depending on
+sample) is small enough that it could partly be noise — which, if anything,
+makes the trade look better still.
 
 ## 10. Caveats and open questions
 
-- **Evaluation register mismatch — now the leading explanation.** Dev queries
-  are verbose LaTeX prose; A1 is terse docstring prose and never enters dev. A
-  real improvement in docstring-style retrieval would be invisible here. This
-  was written down before the results and is consistent with the damage pattern
-  in §9.5. Being tested directly by `a1_docstring_eval.slurm`.
+- **Evaluation register mismatch — CONFIRMED, no longer open.** Dev queries are
+  verbose LaTeX prose; A1 is terse docstring prose. §9.7 measured the effect
+  directly: +0.0769 Recall@1 on docstring queries at 4.3 sigma, against −0.0087
+  on the base register. The benchmark's single-register design hid the benefit
+  entirely. Adding a standing docstring metric is recommendation 2 in §9.8.
 - **Some docstrings name rather than state.** For example,
   `MeasureTheory.condExp_mul_of_stronglyMeasurable_left` → *"Pull-out property
   of the conditional expectation."* That is weak training signal. A1 carries
