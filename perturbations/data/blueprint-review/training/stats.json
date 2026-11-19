@@ -1,0 +1,26 @@
+{
+  "train": {
+    "anchors": 259,
+    "modules": 11,
+    "positives": 838,
+    "negatives": 1976,
+    "negatives_by_class": {
+      "contradictory": 267,
+      "graded": 1497,
+      "entailed": 212
+    }
+  },
+  "dev": {
+    "anchors": 5,
+    "modules": 2,
+    "positives": 25,
+    "negatives": 38,
+    "negatives_by_class": {
+      "contradictory": 5,
+      "graded": 29,
+      "entailed": 4
+    }
+  },
+  "ambiguous_variants": 0,
+  "skipped_no_positive": 60
+}

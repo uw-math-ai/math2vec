@@ -1,0 +1,78 @@
+________________________________________________________________________________
+Miniforge (conda) has been loaded.
+
+WARNING: Login nodes are CPU ONLY. Install pkgs with GPU support on compute
+nodes.
+
+- Please create and work in your own conda environments:
+    conda create -n myenv python=3.11
+    conda activate myenv
+
+- To customize environment or package locations, edit your ~/.condarc:
+    envs_dirs:
+      - /path/to/your/envs
+    pkgs_dirs:
+      - /path/to/your/pkgs
+
+  For more information, see:
+    https://docs.conda.io/projects/conda/en/latest/configuration.html
+
+- If your personal Conda stops working after unloading this module, try:
+    source ~/.bashrc
+________________________________________________________________________________
+
+Lmod has detected the following error: Conda is already active (CONDA_PREFIX
+is set). Module conda/Miniforge3-25.3.1-3 not loaded. 
+While processing the following module(s):
+    Module fullname            Module Filename
+    ---------------            ---------------
+    conda/Miniforge3-25.3.1-3  /gpfs/software/modulefiles/Core/conda/Miniforge3-25.3.1-3.lua
+──────────────────────────────────────────────────────────────────────
+ Wiggle blueprint perturbations on Tillicum
+ host     : g017
+ job id   : 391557
+ project  : /gpfs/projects/mathai/mayidan/math2vec/perturbations
+ cpus     : 8
+ steps    : eval plot
+ models   : Qwen/Qwen3-Embedding-8B sentence-transformers/all-MiniLM-L6-v2
+ output   : /gpfs/projects/mathai/mayidan/math2vec/perturbations/data/blueprint-review
+ perturb  : no new anchors after Mon Oct 26 22:50:34 PDT 2026
+──────────────────────────────────────────────────────────────────────
+NVIDIA H200, 143771 MiB, 615.71.09
+
+══ MTEB eval
+{"anchors_with_variants": 324, "ambiguous_variants": 1, "skipped_no_positive": 15, "skipped_no_negative": 0, "queries": 309, "documents": 2918, "positives": 993, "negatives": 1925}
+
+── Qwen/Qwen3-Embedding-8B on NVIDIA H200
+The `tokenizer_kwargs` argument was renamed and is now deprecated. Please use `processor_kwargs` instead.
+Loading weights:   0%|          | 0/398 [00:00<?, ?it/s]Loading weights:  94%|█████████▍| 374/398 [00:00<00:00, 3729.17it/s]Loading weights: 100%|██████████| 398/398 [00:00<00:00, 3831.74it/s]
+Standardizing text corpus format:   0%|          | 0/2918 [00:00<?, ? examples/s]Standardizing text corpus format: 100%|██████████| 2918/2918 [00:00<00:00, 49081.17 examples/s]
+Prompt type 'document' not found in task metadata for task 'WigglePerturbationReranking'.
+/gpfs/projects/mathai/mayidan/envs/wiggle/lib/python3.12/site-packages/mteb/models/abs_encoder.py:301: UserWarning: Prompt type 'document' not found in task metadata for task 'WigglePerturbationReranking'.
+  instruction = self.get_instruction(task_metadata, prompt_type)
+Reranking queries:   0%|          | 0/309 [00:00<?, ?it/s]Reranking queries:   0%|          | 1/309 [00:03<18:31,  3.61s/it]Reranking queries:   1%|          | 2/309 [00:03<08:33,  1.67s/it]Reranking queries:  40%|████      | 124/309 [00:04<00:03, 58.96it/s]Reranking queries:  80%|███████▉  | 246/309 [00:04<00:00, 133.25it/s]Reranking queries: 100%|██████████| 309/309 [00:04<00:00, 73.97it/s] 
+   ndcg_at_10=0.6520, map_at_1000=0.4912, mrr_at_10=0.6449, precision_at_1=0.4531
+   equivalent > contradictory: 0.945 (993 pairs)
+   equivalent > entailed: 0.428 (1012 pairs)
+   equivalent > graded: 0.298 (4263 pairs)
+   equivalent > all: 0.422 (6268 pairs)
+
+── sentence-transformers/all-MiniLM-L6-v2 on NVIDIA H200
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 10528.69it/s]
+Standardizing text corpus format:   0%|          | 0/2918 [00:00<?, ? examples/s]Standardizing text corpus format: 100%|██████████| 2918/2918 [00:00<00:00, 49468.61 examples/s]
+Reranking queries:   0%|          | 0/309 [00:00<?, ?it/s]Reranking queries: 100%|██████████| 309/309 [00:00<00:00, 15288.36it/s]
+   ndcg_at_10=0.4931, map_at_1000=0.3430, mrr_at_10=0.3615, precision_at_1=0.0939
+   equivalent > contradictory: 0.510 (993 pairs)
+   equivalent > entailed: 0.345 (1012 pairs)
+   equivalent > graded: 0.124 (4263 pairs)
+   equivalent > all: 0.221 (6268 pairs)
+
+wrote data/blueprint-review/mteb
+
+══ diagrams
+wrote data/blueprint-review/figures
+
+Done in 1 min. Artifacts in /gpfs/projects/mathai/mayidan/math2vec/perturbations/data/blueprint-review:
+    figures/summary.md + figures/*.png   scores table and diagrams
+    mteb/<model>/                        raw MTEB scores and cosine tables
+    review.md, results.jsonl             perturbations

@@ -230,9 +230,9 @@ def eval_retrieval_full_corpus(
         for ki in all_ks:
             if gold in retrieved[:ki]:
                 hits[ki] += 1
-            if gold in retrieved[:k]:  # MRR only at primary k
-                rank = retrieved[:k].index(gold) + 1
-                rr += 1.0 / rank
+        if gold in retrieved[:k]:  # MRR only at primary k
+            rank = retrieved[:k].index(gold) + 1
+            rr += 1.0 / rank
 
     n = len(dev_pairs)
     metrics = {f"recall@{ki}": hits[ki] / n for ki in all_ks}

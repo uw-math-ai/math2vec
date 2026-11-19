@@ -1,0 +1,106 @@
+________________________________________________________________________________
+Miniforge (conda) has been loaded.
+
+WARNING: Login nodes are CPU ONLY. Install pkgs with GPU support on compute
+nodes.
+
+- Please create and work in your own conda environments:
+    conda create -n myenv python=3.11
+    conda activate myenv
+
+- To customize environment or package locations, edit your ~/.condarc:
+    envs_dirs:
+      - /path/to/your/envs
+    pkgs_dirs:
+      - /path/to/your/pkgs
+
+  For more information, see:
+    https://docs.conda.io/projects/conda/en/latest/configuration.html
+
+- If your personal Conda stops working after unloading this module, try:
+    source ~/.bashrc
+________________________________________________________________________________
+
+──────────────────────────────────────────────────────────────────────
+ Wiggle blueprint perturbations on Tillicum
+ host     : g020
+ job id   : 442625
+ project  : /gpfs/projects/mathai/mayidan/math2vec/perturbations
+ cpus     : 32
+ steps    : build prepare perturb certify eval plot
+ models   : Qwen/Qwen3-Embedding-8B sentence-transformers/all-MiniLM-L6-v2
+ output   : /gpfs/projects/mathai/mayidan/math2vec/perturbations/data/blueprint-review
+ perturb  : no new anchors after Tue Nov 10 03:58:50 PST 2026
+──────────────────────────────────────────────────────────────────────
+NVIDIA H200, 143771 MiB, 615.71.09
+NVIDIA H200, 143771 MiB, 615.71.09
+NVIDIA H200, 143771 MiB, 615.71.09
+NVIDIA H200, 143771 MiB, 615.71.09
+
+══ build: lake build Wiggle
+Build completed successfully (8249 jobs).
+
+══ prepare anchors
+4378 declarations → 2803 anchors (1043 not theorem/lemma or unparsed, 532 duplicates) → data/blueprint-review/blueprint_anchors.jsonl
+
+══ perturb (one layer, 32 workers)
+2803 unique anchors (from 0 CSV rows), Lean on, 32 worker(s)
+resuming: 2803 anchors already done
+
+3527 variants from 2803 anchors in 0s
+  data/blueprint-review/review.md
+  data/blueprint-review/results.jsonl
+
+══ certify labels (32 workers)
+324 anchors, 317 already certified, 7 to go, 32 worker(s)
+  [318/324] bp_02266: 14 variants, 291s
+  [319/324] bp_02759: 13 variants, 311s
+concurrent.futures.process._RemoteTraceback: 
+"""
+Traceback (most recent call last):
+  File "/gpfs/projects/mathai/mayidan/envs/wiggle/lib/python3.12/concurrent/futures/process.py", line 264, in _process_worker
+    r = call_item.fn(*call_item.args, **call_item.kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/gpfs/projects/mathai/mayidan/math2vec/perturbations/pipeline/certify_labels.py", line 165, in certify_anchor
+    cert = certificate(anchor, r["variant"], anchor_easy, heartbeats, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/gpfs/projects/mathai/mayidan/math2vec/perturbations/pipeline/certify_labels.py", line 122, in certificate
+    "contradiction": _proves(f"{a} → ¬{v}", "intro h", heartbeats, timeout),
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/gpfs/projects/mathai/mayidan/math2vec/perturbations/pipeline/certify_labels.py", line 98, in _proves
+    output = run_lean(code, timeout=timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/gpfs/projects/mathai/mayidan/math2vec/perturbations/src/wiggle/lean_runner.py", line 97, in run_lean
+    return _run_lean_subprocess(code, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/gpfs/projects/mathai/mayidan/math2vec/perturbations/src/wiggle/lean_runner.py", line 113, in _run_lean_subprocess
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/gpfs/projects/mathai/mayidan/envs/wiggle/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/gpfs/projects/mathai/mayidan/envs/wiggle/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/gpfs/projects/mathai/mayidan/envs/wiggle/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/gpfs/projects/mathai/mayidan/envs/wiggle/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['lake', 'env', 'lean', '/gpfs/projects/mathai/mayidan/math2vec/perturbations/_wiggle_748jaest.lean']' timed out after 60 seconds
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/gpfs/projects/mathai/mayidan/math2vec/perturbations/pipeline/certify_labels.py", line 273, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/gpfs/projects/mathai/mayidan/math2vec/perturbations/pipeline/certify_labels.py", line 251, in main
+    rows = fut.result()
+           ^^^^^^^^^^^^
+  File "/gpfs/projects/mathai/mayidan/envs/wiggle/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/gpfs/projects/mathai/mayidan/envs/wiggle/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+subprocess.TimeoutExpired: Command '['lake', 'env', 'lean', '/gpfs/projects/mathai/mayidan/math2vec/perturbations/_wiggle_748jaest.lean']' timed out after 60 seconds
