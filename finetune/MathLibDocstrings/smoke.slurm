@@ -1,6 +1,6 @@
 #!/bin/bash
 # ---------------------------------------------------------------------------
-# SMOKE TEST for the A1-docstrings experiment. debug QOS, 1 GPU, ~15-25 min.
+# SMOKE TEST for the MathLibDocstrings-docstrings experiment. debug QOS, 1 GPU, ~15-25 min.
 # Proves the --extra_train_jsonl path works end to end before spending ~8-10
 # GPU-hours on the real run.
 #
@@ -14,7 +14,7 @@
 # No --partition: Tillicum assigns it automatically (as run_benchmarking.slurm
 # already relies on).
 # ---------------------------------------------------------------------------
-#SBATCH --job-name=mv3_smoke_a1
+#SBATCH --job-name=mv3_smoke_docstrings
 #SBATCH --account=mathai
 #SBATCH --qos=debug
 #SBATCH --gpus=1
@@ -44,14 +44,14 @@ mkdir -p "$HF_HOME" "$HF_DATASETS_CACHE" "$TRANSFORMERS_CACHE" \
 echo "=== node $(hostname) | job $SLURM_JOB_ID | $(date) ==="
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
-RUN=smoke_a1
+RUN=smoke_docstrings
 LOG=logs/${SLURM_JOB_NAME}_${SLURM_JOB_ID}.out
 
 # Paper-recipe flags; only model, rows and epochs are reduced.
 python train_qwen_mnrl_multiview_v3_tg.py \
   --device cuda \
   --local_jsonl data/MathlibViews.jsonl \
-  --extra_train_jsonl data/a1_kept_concepts_v4.19.0.jsonl \
+  --extra_train_jsonl data/MathLibDocstrings_v4.19.0.jsonl \
   --model_name Qwen/Qwen3-Embedding-0.6B \
   --max_rows 2000 \
   --epochs 1 \

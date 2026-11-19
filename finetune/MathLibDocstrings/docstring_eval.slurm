@@ -1,9 +1,9 @@
 #!/bin/bash
 # ---------------------------------------------------------------------------
-# Does the +A1 model retrieve better from DOCSTRING-style queries?
+# Does the +MathLibDocstrings model retrieve better from DOCSTRING-style queries?
 #
 # The main experiment only ever asked base-style (verbose LaTeX) questions and
-# found +A1 slightly worse. This evaluates both SAVED models on the 1,497 A1
+# found +MathLibDocstrings slightly worse. This evaluates both SAVED models on the 1,497 MathLibDocstrings
 # docstrings whose theorems landed in the dev set -- held out from training by
 # the dev-leakage filter, so no model has seen them -- plus a base-NL control
 # on exactly the same theorems.
@@ -39,16 +39,16 @@ export TOKENIZERS_PARALLELISM=false
 mkdir -p "$TMPDIR" logs
 
 PAPER=${PAPER:-checkpoints/mv3_qwen8b_paper_ep2}
-A1=${A1:-checkpoints/mv3_qwen8b_a1_ep2}
+DOCSTRINGS_MODEL=${DOCSTRINGS_MODEL:-checkpoints/mv3_qwen8b_docstrings_ep2}
 OUT=${OUT:-docstring_eval.json}
 
 echo "=== node $(hostname) | job $SLURM_JOB_ID | $(date) ==="
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
-python repo/finetune/a1_docstrings/docstring_eval.py \
-  --models "$PAPER" "$A1" \
+python repo/finetune/MathLibDocstrings/docstring_eval.py \
+  --models "$PAPER" "$DOCSTRINGS_MODEL" \
   --base data/MathlibViews.jsonl \
-  --a1   data/a1_kept_concepts_v4.19.0.jsonl \
+  --docstrings   data/MathLibDocstrings_v4.19.0.jsonl \
   --trainer train_qwen_mnrl_multiview_v3_tg.py \
   --device cuda \
   --out "$OUT"

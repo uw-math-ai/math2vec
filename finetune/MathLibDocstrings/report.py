@@ -4,10 +4,10 @@
 CPU only -- reads what the trainer already wrote. No GPU, no model loading.
 
     # one run: shows base Qwen3-8B vs this run's fine-tuned model
-    python report.py checkpoints/mv3_qwen8b_a1_ep2
+    python report.py checkpoints/mv3_qwen8b_docstrings_ep2
 
-    # two runs: adds the cross-run A1-vs-paper comparison (the experiment)
-    python report.py checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_a1_ep2
+    # two runs: adds the cross-run MathLibDocstrings-vs-paper comparison (the experiment)
+    python report.py checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_docstrings_ep2
 
     # markdown for pasting into a writeup
     python report.py --markdown checkpoints/*_ep2 > results.md
@@ -42,7 +42,7 @@ def load_run(path):
     extra = d.get("counts", {}).get("extra_train") or {}
     d["_run"] = run
     d["_path"] = mp
-    d["_is_a1"] = bool(extra.get("extra_in"))
+    d["_is_docstrings"] = bool(extra.get("extra_in"))
     # optional sidecar from collect.sh
     ri = os.path.join(os.path.dirname(mp), "runinfo.json")
     d["_runinfo"] = json.load(open(ri)) if os.path.isfile(ri) else {}
@@ -101,8 +101,8 @@ def main():
     md = args.markdown
 
     runs = [load_run(p) for p in args.runs]
-    # baseline arm (no EXTRA) first, A1 arm second
-    runs.sort(key=lambda d: d["_is_a1"])
+    # baseline arm (no EXTRA) first, MathLibDocstrings arm second
+    runs.sort(key=lambda d: d["_is_docstrings"])
 
     head("Runs", md)
     t = Table(["Run", "Model", "EXTRA", "Epochs", "Train", "Dev", "Wall", "GPU-h"], md)
@@ -180,21 +180,21 @@ def main():
         print(t.render())
 
     # ---- cross-run: the actual experiment ----
-    base_arm = next((d for d in runs if not d["_is_a1"]), None)
-    a1_arm = next((d for d in runs if d["_is_a1"]), None)
-    if base_arm and a1_arm:
-        head("EXPERIMENT: paper recipe vs + A1 docstrings (both fine-tuned)", md)
-        p, a = base_arm.get("finetuned", {}), a1_arm.get("finetuned", {})
-        t = Table(["Metric", "Paper recipe", "+ A1 docstrings", "Delta"], md)
+    base_arm = next((d for d in runs if not d["_is_docstrings"]), None)
+    docstrings_arm = next((d for d in runs if d["_is_docstrings"]), None)
+    if base_arm and docstrings_arm:
+        head("EXPERIMENT: paper recipe vs + MathLibDocstrings (both fine-tuned)", md)
+        p, a = base_arm.get("finetuned", {}), docstrings_arm.get("finetuned", {})
+        t = Table(["Metric", "Paper recipe", "+ MathLibDocstrings", "Delta"], md)
         for lbl, key in metric_keys(base_arm.get("baseline", {})):
             t.add(lbl, fmt(p.get(key)), fmt(a.get(key)), delta(a.get(key), p.get(key)))
         print(t.render())
 
-        head("All pair types: paper recipe vs + A1 docstrings (fine-tuned)", md)
-        pp, ap_ = base_arm.get("finetuned_per_pair_type", {}), a1_arm.get("finetuned_per_pair_type", {})
+        head("All pair types: paper recipe vs + MathLibDocstrings (fine-tuned)", md)
+        pp, ap_ = base_arm.get("finetuned_per_pair_type", {}), docstrings_arm.get("finetuned_per_pair_type", {})
         k = int(base_arm.get("baseline", {}).get("k", 10))
         t = Table(["Pair type", "n_dev", f"Paper R@1/R@{k}/MRR@{k}",
-                   f"+A1 R@1/R@{k}/MRR@{k}", f"dR@1", f"dMRR@{k}"], md)
+                   f"+MathLibDocstrings R@1/R@{k}/MRR@{k}", f"dR@1", f"dMRR@{k}"], md)
         for key, desc in PAIR_ORDER:
             pr, ar = pp.get(key, {}), ap_.get(key, {})
             if pr.get("skipped") and ar.get("skipped"):
@@ -208,10 +208,10 @@ def main():
         print(t.render())
 
         pl, al = (base_arm.get("finetuned_per_pair_type_loss") or {},
-                  a1_arm.get("finetuned_per_pair_type_loss") or {})
+                  docstrings_arm.get("finetuned_per_pair_type_loss") or {})
         if pl or al:
             head("Per-pair-type contrastive loss, fine-tuned (lower is better)", md)
-            t = Table(["Pair type", "Paper recipe", "+ A1 docstrings", "Delta"], md)
+            t = Table(["Pair type", "Paper recipe", "+ MathLibDocstrings", "Delta"], md)
             for key, desc in PAIR_ORDER:
                 if pl.get(key) is None and al.get(key) is None:
                     continue
@@ -220,15 +220,15 @@ def main():
             print(t.render())
     else:
         head("Cross-run comparison", md)
-        have = "the A1 arm" if a1_arm else "the paper baseline"
-        want = "paper baseline" if a1_arm else "A1 arm"
-        print(f"Only {have} was supplied, so the paper-vs-A1 table is omitted.\n"
+        have = "the MathLibDocstrings arm" if docstrings_arm else "the paper baseline"
+        want = "paper baseline" if docstrings_arm else "MathLibDocstrings arm"
+        print(f"Only {have} was supplied, so the paper-vs-MathLibDocstrings table is omitted.\n"
               f"Pass both run directories to get it. To produce the {want}:\n")
-        if a1_arm:
+        if docstrings_arm:
             print("  sbatch --export=ALL,RUN=mv3_qwen8b_paper_ep2 run.slurm")
         else:
-            print("  sbatch --export=ALL,RUN=mv3_qwen8b_a1_ep2,"
-                  "EXTRA=data/a1_kept_concepts_v4.19.0.jsonl run.slurm")
+            print("  sbatch --export=ALL,RUN=mv3_qwen8b_docstrings_ep2,"
+                  "EXTRA=data/MathLibDocstrings_v4.19.0.jsonl run.slurm")
 
     head("Per-pair-type detail: base vs fine-tuned, each run", md)
     for d in runs:

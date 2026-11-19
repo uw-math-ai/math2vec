@@ -1,6 +1,6 @@
-# A1 Mathlib-docstrings fine-tuning experiment
+# MathLibDocstrings fine-tuning experiment
 
-Adds `a1_kept_concepts_v4.19.0.jsonl` (18,747 Mathlib v4.19.0 theorem/docstring
+Adds `MathLibDocstrings_v4.19.0.jsonl` (18,747 Mathlib v4.19.0 theorem/docstring
 pairs) to the paper training recipe as **training-only** data, and compares
 against the paper baseline on an identical dev set.
 
@@ -11,13 +11,13 @@ Target: Tillicum (UW Hyak), NVIDIA H200, Slurm.
 | Arm | RUN | Trains on |
 |---|---|---|
 | Paper baseline | `mv3_qwen8b_paper_ep2` | MathlibViews.jsonl (133,621 concepts) |
-| + A1 docstrings | `mv3_qwen8b_a1_ep2` | MathlibViews.jsonl **+ A1 added to training only** |
+| + MathLibDocstrings | `mv3_qwen8b_docstrings_ep2` | MathlibViews.jsonl **+ MathLibDocstrings added to training only** |
 
 Both start from stock `Qwen/Qwen3-Embedding-8B`, use the identical recipe, and
 share a byte-identical dev set. The only difference is the extra training data,
 which is what makes the comparison mean anything. ~8.3 h and ~$7.50 per arm.
 
-> **New to this experiment?** Read `experiments/a1_mathlib_docstrings/README.md` first -- it
+> **New to this experiment?** Read `experiments/MathLibDocstrings/README.md` first -- it
 > explains what the two arms are, how the overlapping theorems are handled, and
 > how to read the results. This file is the operational how-to.
 
@@ -28,13 +28,13 @@ which is what makes the comparison mean anything. ~8.3 h and ~$7.50 per arm.
 mkdir -p /gpfs/scrubbed/$USER/mathlib-ft && cd /gpfs/scrubbed/$USER/mathlib-ft
 git clone -b trainingdata-mathlibdocstring https://github.com/uw-math-ai/math2vec.git repo
 mkdir -p logs
-bash repo/finetune/a1_docstrings/setup_login.sh 2>&1 | tee logs/setup.log
+bash repo/finetune/MathLibDocstrings/setup_login.sh 2>&1 | tee logs/setup.log
 
 # 1. smoke test -- debug QOS, ~15-25 min, proves the --extra_train_jsonl path
 sbatch smoke.slurm
 
 # 2. real runs -- ~8-10 GPU-hours each
-sbatch --export=ALL,RUN=mv3_qwen8b_a1_ep2,EXTRA=data/a1_kept_concepts_v4.19.0.jsonl run.slurm
+sbatch --export=ALL,RUN=mv3_qwen8b_docstrings_ep2,EXTRA=data/MathLibDocstrings_v4.19.0.jsonl run.slurm
 sbatch --export=ALL,RUN=mv3_qwen8b_paper_ep2 run.slurm   # baseline, same dev set
 ```
 
@@ -51,8 +51,6 @@ step 1 and add `--account=<account>` to the `sbatch` line. No script sets
 | `run.slurm` | `normal` | paper recipe on Qwen3-Embedding-8B; `RUN` and `EXTRA` select the arm |
 | `collect.sh` | none (login node) | wall time, GPU-hours, `[extra]` counts; `--archive` copies results to the project folder |
 | `report.py` | none (CPU) | builds the comparison tables from `metrics.json` |
-| `a1_eval_checkpoint.py` | - | optional re-eval, imports the trainer's own eval functions |
-| `a1_eval.slurm` | `normal` | GPU wrapper for `a1_eval_checkpoint.py` |
 
 ## How EXTRA is folded in
 
@@ -74,7 +72,7 @@ Primary metric is **NL -> Lean signature** Recall@1/5/10 and MRR@10.
 `metrics.json` holds `baseline` / `finetuned` plus `*_per_pair_type` for all six
 pair types.
 
-A1 supplies only `nl_informal` and `lean_signature`. It has no `lean_type` or
+MathLibDocstrings supplies only `nl_informal` and `lean_signature`. It has no `lean_type` or
 `nl_informal_2`, so it can only move pair types 1 (NL -> Lean signature) and
 6 (Lean signature -> NL informal). Expect types 2-5 to be roughly flat --
 that is the data shape, not a bug.
@@ -90,26 +88,26 @@ cd /gpfs/scrubbed/$USER/mathlib-ft
 
 # 1. is it done?
 squeue -u $USER -o '%.10i %.14j %.8T %.10M %.6D %R'
-grep -l "RUN=mv3_qwen8b_a1_ep2" logs/*.out     # both arms share the job name
+grep -l "RUN=mv3_qwen8b_docstrings_ep2" logs/*.out     # both arms share the job name
 tail -f logs/mv3_qwen8b_*.out
 
 # 2. wall time, GPU-hours, [extra] counts -> writes runinfo.json
-bash repo/finetune/a1_docstrings/collect.sh mv3_qwen8b_a1_ep2
+bash repo/finetune/MathLibDocstrings/collect.sh mv3_qwen8b_docstrings_ep2
 
 # 3. the tables (CPU, instant)
-python repo/finetune/a1_docstrings/report.py checkpoints/mv3_qwen8b_a1_ep2
+python repo/finetune/MathLibDocstrings/report.py checkpoints/mv3_qwen8b_docstrings_ep2
 
 # 4. once the baseline arm also finishes, the real comparison
-python repo/finetune/a1_docstrings/report.py \
-  checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_a1_ep2
+python repo/finetune/MathLibDocstrings/report.py \
+  checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_docstrings_ep2
 
 # 5. markdown for the writeup
-python repo/finetune/a1_docstrings/report.py --markdown \
-  checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_a1_ep2 > results.md
+python repo/finetune/MathLibDocstrings/report.py --markdown \
+  checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_docstrings_ep2 > results.md
 
 # 6. archive to the backed-up project folder (scratch is purged after 60 days)
-bash repo/finetune/a1_docstrings/collect.sh --archive \
-  mv3_qwen8b_a1_ep2 mv3_qwen8b_paper_ep2
+bash repo/finetune/MathLibDocstrings/collect.sh --archive \
+  mv3_qwen8b_docstrings_ep2 mv3_qwen8b_paper_ep2
 ```
 
 `report.py` prints a **dev-set identity check** first: both arms must show the
@@ -117,17 +115,14 @@ same `concepts_total` / `train` / `dev` / `n_dev_used` / `corpus_size`. If they
 do not, it says so loudly and the cross-run comparison is invalid -- that is the
 one result worth checking before you believe any delta.
 
-### Optional: re-eval a saved model on a GPU
+### Docstring-style evaluation
 
-`a1_eval_checkpoint.py` + `a1_eval.slurm` re-run the eval against a saved model,
-importing `eval_retrieval` / `eval_all_pair_types` / `group_split_records` from
-the trainer so numbers stay comparable. Only needed for a mid-training
-checkpoint, a different `k`, a different concept file, or a run that died after
-training but before eval.
+`docstring_eval.py` + `docstring_eval.slurm` evaluate saved models on
+docstring-style queries, using the held-out records whose theorems landed in
+dev. See the experiment write-up for what this measures and why it matters.
 
 ```bash
-sbatch --export=ALL,RUN=mv3_qwen8b_a1_ep2 a1_eval.slurm
-sbatch --export=ALL,RUN=mv3_qwen8b_a1_ep2,PRIMARY_ONLY=1 a1_eval.slurm
+sbatch docstring_eval.slurm
 ```
 
 The split is reproducible because `group_split_records` shuffles the sorted
@@ -138,7 +133,7 @@ never changes it.
 ## Possible follow-on
 
 `PROPOSAL_explicit_view_pairs.md` sketches a *possible later* run on this same
-A1 dataset: enumerate view pairs explicitly instead of sampling two views at
+MathLibDocstrings dataset: enumerate view pairs explicitly instead of sampling two views at
 random per epoch. **An idea only -- not solidified, not scheduled, and not the
 run described above.**
 
@@ -150,8 +145,8 @@ log to `logs/mv3_qwen8b_<jobid>.out` and cannot be told apart by filename.
 script echoes. To avoid the ambiguity on future submissions, override the name:
 
 ```bash
-sbatch --job-name=mv3_qwen8b_a1_ep2 \
-  --export=ALL,RUN=mv3_qwen8b_a1_ep2,EXTRA=data/a1_kept_concepts_v4.19.0.jsonl \
+sbatch --job-name=mv3_qwen8b_docstrings_ep2 \
+  --export=ALL,RUN=mv3_qwen8b_docstrings_ep2,EXTRA=data/MathLibDocstrings_v4.19.0.jsonl \
   run.slurm
 ```
 
@@ -167,7 +162,7 @@ grep -E '^\[extra\]|Recall@|MRR@' logs/mv3_qwen8b_*.out
 
 - Scratch (`/gpfs/scrubbed`) is **not backed up** and is purged after 60 days
   without modification. Copy `metrics.json` and logs to
-  `/gpfs/projects/mathai/math2vec/experiments/<name>/a1_docstrings/` when done.
+  `/gpfs/projects/mathai/math2vec/experiments/<name>/MathLibDocstrings/` when done.
 - Env is Python 3.12: `numpy==2.0.2` / `scipy==1.13.1` have no 3.13 wheels.
 - `Qwen3-Embedding-0.6B` is cached alongside the 8B because the smoke test
   needs it and compute nodes may have no internet.

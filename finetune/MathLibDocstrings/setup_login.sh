@@ -1,6 +1,6 @@
 #!/bin/bash
 # ---------------------------------------------------------------------------
-# A1-docstrings experiment -- LOGIN NODE SETUP. No GPU, no sbatch.
+# MathLibDocstrings-docstrings experiment -- LOGIN NODE SETUP. No GPU, no sbatch.
 # Steps: orient, workspace, conda env, data + overlap check, model cache.
 # Idempotent; only touches /gpfs/scrubbed/$USER.
 #
@@ -8,16 +8,16 @@
 #   mkdir -p /gpfs/scrubbed/$USER/mathlib-ft && cd /gpfs/scrubbed/$USER/mathlib-ft
 #   git clone -b trainingdata-mathlibdocstring \
 #     https://github.com/uw-math-ai/math2vec.git repo
-#   bash repo/finetune/a1_docstrings/setup_login.sh 2>&1 | tee logs/setup.log
+#   bash repo/finetune/MathLibDocstrings/setup_login.sh 2>&1 | tee logs/setup.log
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
 WORK=/gpfs/scrubbed/$USER/mathlib-ft
 ENVDIR=/gpfs/scrubbed/$USER/conda-envs/mathlib-ft
 BRANCH=trainingdata-mathlibdocstring
-A1=a1_kept_concepts_v4.19.0.jsonl
-A1_SRC=repo/dataset/a1_mathlib_docstrings/$A1
-A1_SHA=da823e1476c4b1b6dee9ba1efeaa320768ab5605f2b61796001828dc917345d3
+DOCSTRINGS_FILE=MathLibDocstrings_v4.19.0.jsonl
+DOCSTRINGS_SRC=repo/dataset/MathLibDocstrings/$DOCSTRINGS_FILE
+DOCSTRINGS_SHA=da823e1476c4b1b6dee9ba1efeaa320768ab5605f2b61796001828dc917345d3
 
 echo "############ 1. ORIENT ############"
 echo "user: $(whoami)"
@@ -37,7 +37,7 @@ else
   git clone -b "$BRANCH" https://github.com/uw-math-ai/math2vec.git repo
 fi
 cp repo/finetune/train_qwen_mnrl_multiview_v3_tg.py .
-cp repo/finetune/a1_docstrings/smoke.slurm repo/finetune/a1_docstrings/run.slurm .
+cp repo/finetune/MathLibDocstrings/smoke.slurm repo/finetune/MathLibDocstrings/run.slurm .
 echo "repo at $(git -C repo rev-parse --short HEAD) on $(git -C repo rev-parse --abbrev-ref HEAD)"
 ls -la "$WORK"
 
@@ -57,8 +57,8 @@ python -c "import torch, sentence_transformers; print('torch', torch.__version__
 
 echo; echo "############ 4. DATA ############"
 cd "$WORK"
-cp -n "$A1_SRC" "data/$A1"
-echo "$A1_SHA  data/$A1" | sha256sum -c -
+cp -n "$DOCSTRINGS_SRC" "data/$DOCSTRINGS_FILE"
+echo "$DOCSTRINGS_SHA  data/$DOCSTRINGS_FILE" | sha256sum -c -
 
 if [ ! -f data/MathlibViews.jsonl ]; then
   if [ -f /gpfs/projects/mathai/math2vec/MathlibViews.jsonl ]; then
@@ -84,15 +84,15 @@ def load(p):
             mods.add(r.get("metadata",{}).get("module_name",""))
     return ids, mods, n
 b,bm,bn = load("data/MathlibViews.jsonl")
-a,am,an = load("data/a1_kept_concepts_v4.19.0.jsonl")
+a,am,an = load("data/MathLibDocstrings_v4.19.0.jsonl")
 print(f"base : rows={bn:,} unique_ids={len(b):,} modules={len(bm):,}")
-print(f"A1   : rows={an:,} unique_ids={len(a):,} modules={len(am):,}")
-print(f"A1 ids ALREADY in base : {len(a&b):,} ({100*len(a&b)/len(a):.1f}%) -> merge as extra NL views")
-print(f"A1 ids NEW to base     : {len(a-b):,} ({100*len(a-b)/len(a):.1f}%) -> new training concepts")
-print(f"A1 modules also in base: {len(am&bm):,} / {len(am):,}")
-print(f"A1 module_name NOT 'Mathlib.*': {sum(1 for m in am if not m.startswith('Mathlib.'))}")
+print(f"MathLibDocstrings   : rows={an:,} unique_ids={len(a):,} modules={len(am):,}")
+print(f"MathLibDocstrings ids ALREADY in base : {len(a&b):,} ({100*len(a&b)/len(a):.1f}%) -> merge as extra NL views")
+print(f"MathLibDocstrings ids NEW to base     : {len(a-b):,} ({100*len(a-b)/len(a):.1f}%) -> new training concepts")
+print(f"MathLibDocstrings modules also in base: {len(am&bm):,} / {len(am):,}")
+print(f"MathLibDocstrings module_name NOT 'Mathlib.*': {sum(1 for m in am if not m.startswith('Mathlib.'))}")
 print("\nNOTE: the NEW-to-base share drives runtime. 0% -> ~8 h, 100% -> ~9.3 h.")
-for p in ("data/MathlibViews.jsonl","data/a1_kept_concepts_v4.19.0.jsonl"):
+for p in ("data/MathlibViews.jsonl","data/MathLibDocstrings_v4.19.0.jsonl"):
     print(f"\n===== 2 rows of {p} =====")
     with open(p) as f:
         for _ in range(2):

@@ -1,8 +1,8 @@
 # Experiment: Do Mathlib docstrings improve NL → Lean retrieval?
 
 **Status:** both arms complete. Run 2026-11-16/17 on Tillicum (UW Hyak).
-**Jobs:** `486428` (paper arm), `486429` (+A1 arm) — both `COMPLETED`, exit 0.
-**Headline:** A1 teaches the model a *query register* the base data does not
+**Jobs:** `486428` (paper arm), `486429` (+MathLibDocstrings arm) — both `COMPLETED`, exit 0.
+**Headline:** MathLibDocstrings teaches the model a *query register* the base data does not
 cover. On docstring-style queries it is **+0.0769 Recall@1 (4.3 sigma)**; on the
 base LaTeX-style queries the main benchmark asks, it is −0.0080. The benchmark
 measured the cost of that trade and none of the benefit. See §9.7 and §9.8.
@@ -29,13 +29,13 @@ comparing them on an identical evaluation set.
 | Dataset | File | Size |
 |---|---|---|
 | **Base** (the paper's data) | `MathlibViews.jsonl` | 133,621 rows, 126,059 unique concepts, 5,553 modules |
-| **A1** (new) | `a1_kept_concepts_v4.19.0.jsonl` | 18,747 rows, 18,747 unique concepts, 3,099 modules |
+| **MathLibDocstrings** (new) | `MathLibDocstrings_v4.19.0.jsonl` | 18,747 rows, 18,747 unique concepts, 3,099 modules |
 
-A1 was extracted from Mathlib v4.19.0 (commit `c44e0c8e`). Each record pairs a
+MathLibDocstrings was extracted from Mathlib v4.19.0 (commit `c44e0c8e`). Each record pairs a
 Lean declaration with its actual Mathlib docstring. sha256
 `da823e1476c4b1b6dee9ba1efeaa320768ab5605f2b61796001828dc917345d3`.
 
-**The two datasets overlap heavily.** Of A1's 18,747 concepts:
+**The two datasets overlap heavily.** Of MathLibDocstrings' 18,747 concepts:
 
 - **14,501 (77.4%)** are theorems the base dataset *already contains*
 - **4,246 (22.6%)** are theorems the base dataset does *not* contain
@@ -45,7 +45,7 @@ explains how it is handled.
 
 ### The two datasets describe theorems very differently
 
-Before running anything we checked whether A1's docstrings are just reworded
+Before running anything we checked whether MathLibDocstrings' docstrings are just reworded
 versions of the NL already in the base data. They are not:
 
 - **0** of 14,501 overlapping docstrings are byte-identical to the base NL
@@ -58,10 +58,10 @@ different registers. For `Convex.add_smul_sub_mem_interior'`:
 > $\mathbb{K}$, and let $s \subseteq E$ be a convex set. For any points
 > $x \in \text{closure}(s)$ and $y \in \text{interior}(s)$...*
 >
-> **A1:** *If `x ∈ closure s` and `y ∈ interior s`, then the segment `(x, y]` is
+> **MathLibDocstrings:** *If `x ∈ closure s` and `y ∈ interior s`, then the segment `(x, y]` is
 > included in `interior s`.*
 
-The base NL is verbose LaTeX prose; A1 is terse Mathlib-style prose using Lean
+The base NL is verbose LaTeX prose; MathLibDocstrings is terse Mathlib-style prose using Lean
 notation. Same theorem, two genuinely different descriptions. This matters for
 interpreting the result — see §8.
 
@@ -70,11 +70,11 @@ interpreting the result — see §8.
 Both arms start from the same stock model, `Qwen/Qwen3-Embedding-8B`, and use
 an identical training recipe. **The only difference is the training data.**
 
-| | Arm 1 — paper baseline | Arm 2 — + A1 docstrings |
+| | Arm 1 — paper baseline | Arm 2 — + MathLibDocstrings |
 |---|---|---|
-| RUN name | `mv3_qwen8b_paper_ep2` | `mv3_qwen8b_a1_ep2` |
+| RUN name | `mv3_qwen8b_paper_ep2` | `mv3_qwen8b_docstrings_ep2` |
 | Slurm job | 486428 | 486429 |
-| Trains on | base data only | base data **+ A1** |
+| Trains on | base data only | base data **+ MathLibDocstrings** |
 | Evaluates on | the same dev set | the same dev set |
 
 Recipe for both: full fine-tune of all 8B parameters (no LoRA, no frozen
@@ -85,16 +85,16 @@ theorems from one file cannot be split across train and dev.
 
 **Why a baseline arm is necessary.** The trainer automatically reports how the
 fine-tuned model compares to the *stock* model. But the stock comparison would
-look good for either arm — fine-tuning on 133k theorems helps regardless of A1.
-The only way to isolate A1's contribution is to train a model without it and
+look good for either arm — fine-tuning on 133k theorems helps regardless of MathLibDocstrings.
+The only way to isolate MathLibDocstrings' contribution is to train a model without it and
 compare the two fine-tuned models directly.
 
 ## 4. How the 14,501 overlapping theorems are handled
 
 This is the mechanical heart of the experiment.
 
-A1 is supplied via `--extra_train_jsonl`, which folds it into the **training set
-only, after the train/dev split has already been made**. Each A1 record takes
+MathLibDocstrings is supplied via `--extra_train_jsonl`, which folds it into the **training set
+only, after the train/dev split has already been made**. Each MathLibDocstrings record takes
 one of four paths:
 
 | Situation | What happens |
@@ -106,7 +106,7 @@ one of four paths:
 
 So for an overlapping theorem that survives into training, the concept now
 carries **two NL descriptions of one Lean statement**: the base dataset's
-generated description, and A1's Mathlib docstring.
+generated description, and MathLibDocstrings' Mathlib docstring.
 
 ### What the model actually trains on
 
@@ -142,7 +142,7 @@ theorems**, which add roughly **3.5%** more training concepts to Arm 2.
 
 ## 5. Why the comparison is valid
 
-`--extra_train_jsonl` is applied **after** the train/dev split, and A1 records
+`--extra_train_jsonl` is applied **after** the train/dev split, and MathLibDocstrings records
 that would touch dev are dropped. The evaluation set and retrieval corpus are
 therefore byte-identical between the two arms.
 
@@ -155,7 +155,7 @@ not, the tool prints a warning and the comparison should be discarded.
 
 | Check | Result |
 |---|---|
-| A1 file integrity | sha256 matches; 18,747 rows; 0 malformed; 0 duplicate IDs |
+| MathLibDocstrings file integrity | sha256 matches; 18,747 rows; 0 malformed; 0 duplicate IDs |
 | Schema | every `module_name` starts with `Mathlib.`; no empty views |
 | Docstrings are not restatements | 0 byte-identical; median similarity 0.129 |
 | End-to-end plumbing | smoke test job `486063` passed (0.6B model, 2k rows, 1 epoch) |
@@ -171,18 +171,18 @@ signature, NL rephrasing → NL, Lean type → Lean signature, Lean signature �
 
 **A note on which pair types can move — corrected after the run.** An earlier
 version of this document predicted that pair types 2–5 could not move, on the
-grounds that A1 only supplies `nl_informal` and `lean_signature` views. **That
+grounds that MathLibDocstrings only supplies `nl_informal` and `lean_signature` views. **That
 was wrong.** NL → Lean type moved the most of any pair type (−0.0208 R@1).
 
-The error was treating A1 as if it only adds *views*. It also retrains the
-**encoder** for the field it is added to. Because A1 arrives as extra
+The error was treating MathLibDocstrings as if it only adds *views*. It also retrains the
+**encoder** for the field it is added to. Because MathLibDocstrings arrives as extra
 `nl_informal` text, it changes how `nl_informal` is embedded — and that affects
 every pair type using `nl_informal` on either side, whatever the other side is.
 Pair types 1 and 2 both query with `nl_informal`, and both declined. See §9.5.
 
 ## 8. How to interpret the result
 
-**If the +A1 arm wins:** real Mathlib docstrings are useful training signal, and
+**If the +MathLibDocstrings arm wins:** real Mathlib docstrings are useful training signal, and
 the most likely mechanism is the `(base_NL, docstring)` pairs teaching the model
 that a verbose LaTeX description and a terse docstring refer to the same
 theorem.
@@ -192,7 +192,7 @@ theorem.
 
 **If the result is flat, that does not automatically mean the data is useless.**
 The dev set is drawn from the base data, so every evaluation query is written in
-the verbose LaTeX register. A1 is training-only and never appears in dev. The
+the verbose LaTeX register. MathLibDocstrings is training-only and never appears in dev. The
 model could genuinely improve at docstring-style retrieval while this evaluation,
 which never asks docstring-style questions, shows nothing. Testing that would
 need a held-out docstring-style eval set, which does not exist yet.
@@ -208,7 +208,7 @@ Generated with `collect.sh` and `report.py`.
 
 ### 9.1 Run details
 
-| | Paper baseline | + A1 docstrings |
+| | Paper baseline | + MathLibDocstrings |
 |---|---|---|
 | Slurm job | 486428 | 486429 |
 | Wall time | 07:09:00 | 07:06:59 |
@@ -221,7 +221,7 @@ Total: **14.27 GPU-hours, ~$12.85**, ~7.3 h wall-clock (the arms ran
 concurrently, starting 10 minutes apart).
 
 > The "base train concepts" row counts only the base split, which is why both
-> arms show 118,334. The +A1 arm additionally trains on 3,847 new training-only
+> arms show 118,334. The +MathLibDocstrings arm additionally trains on 3,847 new training-only
 > concepts, for an effective 122,181. See §9.3.
 
 ### 9.2 Dev-set identity check — PASSED
@@ -229,17 +229,17 @@ concurrently, starting 10 minutes apart).
 | Run | concepts_total | train | dev | n_dev_used | corpus_size |
 |---|---|---|---|---|---|
 | Paper | 133,621 | 118,334 | 15,287 | 15,287 | 133,621 |
-| + A1 | 133,621 | 118,334 | 15,287 | 15,287 | 133,621 |
+| + MathLibDocstrings | 133,621 | 118,334 | 15,287 | 15,287 | 133,621 |
 
 Identical on every column, so the arms are comparable. Both also report the
 *same* stock-model baseline (0.7517 R@1), confirming the evaluation is
 deterministic and genuinely shared.
 
-### 9.3 How much of A1 was actually used
+### 9.3 How much of MathLibDocstrings was actually used
 
 | Count | Value |
 |---|---|
-| Read from the A1 file | 18,747 |
+| Read from the MathLibDocstrings file | 18,747 |
 | Dropped — theorem is a dev target | 1,497 |
 | Dropped — module is a dev module | 399 |
 | Merged into an existing train concept | 13,004 |
@@ -250,21 +250,21 @@ deterministic and genuinely shared.
 protect the dev set.
 
 `nl_views_added` equals `merged_into_train` exactly (13,004 = 13,004), meaning
-**every single merge contributed a genuinely new NL view** — no A1 docstring
+**every single merge contributed a genuinely new NL view** — no MathLibDocstrings
 duplicated text the base record already had. This confirms at full scale what
 the pre-run text-similarity check (§2) measured on a sample.
 
 ### 9.4 PRIMARY RESULT — NL → Lean signature
 
-| Metric | Stock Qwen3-8B | Paper baseline | + A1 docstrings | A1 − paper |
+| Metric | Stock Qwen3-8B | Paper baseline | + MathLibDocstrings | MathLibDocstrings − paper |
 |---|---|---|---|---|
 | **Recall@1** | 0.7517 | **0.8592** | 0.8511 | **−0.0080** |
 | Recall@5 | 0.9534 | 0.9836 | 0.9813 | −0.0023 |
 | Recall@10 | 0.9761 | 0.9929 | 0.9920 | −0.0009 |
 | MRR@10 | 0.8406 | 0.9148 | 0.9099 | −0.0048 |
 
-**Adding A1 made the primary metric slightly worse.** Both arms improve hugely
-over the stock model (+0.1075 and +0.0994 R@1) — fine-tuning works; A1 simply
+**Adding MathLibDocstrings made the primary metric slightly worse.** Both arms improve hugely
+over the stock model (+0.1075 and +0.0994 R@1) — fine-tuning works; MathLibDocstrings simply
 adds nothing here and costs a little.
 
 Scale: −0.0080 on R@1 is about **124 of 15,287 queries**, roughly **2.0 sigma**
@@ -272,7 +272,7 @@ on a conservative unpaired test. Real, small, and near the edge of significance.
 
 ### 9.5 All pair types — the informative result
 
-| Pair type | Query field | Paper R@1 | +A1 R@1 | Δ R@1 | Δ MRR@10 |
+| Pair type | Query field | Paper R@1 | +MathLibDocstrings R@1 | Δ R@1 | Δ MRR@10 |
 |---|---|---|---|---|---|
 | NL → Lean signature (PRIMARY) | `nl_informal` | 0.859 | 0.851 | **−0.0080** | −0.0048 |
 | NL → Lean type | `nl_informal` | 0.808 | 0.787 | **−0.0208** | −0.0135 |
@@ -285,7 +285,7 @@ on a conservative unpaired test. Real, small, and near the edge of significance.
 declined, and they declined by the largest margins. Every other pair type moved
 by less than ±0.005.**
 
-That is the signature of a register conflict. A1 docstrings were poured into the
+That is the signature of a register conflict. MathLibDocstrings were poured into the
 same `nl_informal` slot as the base data's verbose LaTeX prose (§2). The result:
 `nl_informal` became a slightly *worse query encoder* for the base register —
 the only register this benchmark ever asks in — while `nl_informal` as a
@@ -293,7 +293,7 @@ retrieval *target* held up or improved slightly (+0.0050 from Lean signatures).
 
 ### 9.6 Per-pair-type contrastive loss, fine-tuned (lower is better)
 
-| Pair type | Paper | + A1 | Δ |
+| Pair type | Paper | + MathLibDocstrings | Δ |
 |---|---|---|---|
 | NL → Lean signature (PRIMARY) | 0.0016 | 0.0011 | −0.0006 |
 | NL → Lean type | 0.0124 | 0.0044 | **−0.0080** |
@@ -302,16 +302,16 @@ retrieval *target* held up or improved slightly (+0.0050 from Lean signatures).
 | Lean type → Lean signature | 0.0126 | 0.0146 | +0.0021 |
 | Lean signature → NL informal | 0.0009 | 0.0009 | −0.0000 |
 
-**The +A1 model has lower contrastive loss on five of six pair types, including
+**The +MathLibDocstrings model has lower contrastive loss on five of six pair types, including
 the primary — yet worse retrieval.** These measure different things. Loss is
 in-batch discrimination among 16 candidates; Recall@1 is top-1 against 133,621
-near-neighbours. A1 appears to have made the embedding space better at coarse
+near-neighbours. MathLibDocstrings appears to have made the embedding space better at coarse
 separation and slightly worse at fine-grained precision.
 
 ### 9.7 Docstring-style evaluation — the result that reframes everything
 
 The main benchmark only ever asks questions in one register: the base dataset's
-verbose LaTeX prose. §9.5 suggested A1 was being penalised for introducing a
+verbose LaTeX prose. §9.5 suggested MathLibDocstrings was being penalised for introducing a
 second register into a single-register evaluation. This tested that directly.
 
 **Method.** Same two saved models, same 133,621-document `lean_signature`
@@ -319,21 +319,21 @@ corpus, same retrieval task, same delta formula. The only thing that changes is
 the text of the query. Run as job `495410` via `docstring_eval.slurm`;
 no retraining.
 
-The query set was free. The **1,497 A1 records whose theorem landed in the dev
+The query set was free. The **1,497 MathLibDocstrings records whose theorem landed in the dev
 set** were dropped from training by the leakage filter (`drop_dev_id`, §9.3), so
 neither model has ever seen those docstrings — and since dev concepts are
 excluded from training in both arms, neither model trained on those theorems at
 all. A **base-NL control** queries the same 1,497 theorems with the base
 dataset's prose, which separates "better at docstrings" from "easier theorems".
 
-| Query style | Paper baseline | + A1 docstrings | Δ R@1 | Significance |
+| Query style | Paper baseline | + MathLibDocstrings | Δ R@1 | Significance |
 |---|---|---|---|---|
 | **Docstring** | 0.5818 | **0.6587** | **+0.0769** | **4.3 sigma** — 2.2× the noise floor |
 | Base-NL (control) | 0.8577 | 0.8490 | −0.0087 | 0.7 sigma — inside noise |
 
 Full metrics:
 
-| Query style | Metric | Paper | + A1 | Δ |
+| Query style | Metric | Paper | + MathLibDocstrings | Δ |
 |---|---|---|---|---|
 | Docstring | Recall@1 | 0.5818 | 0.6587 | +0.0768 |
 | Docstring | Recall@5 | 0.8484 | 0.9071 | +0.0588 |
@@ -350,23 +350,23 @@ Noise floor at n=1,497: 1 sigma = 0.0177, **2 sigma = 0.0354** on Recall@1.
 matches the main eval's −0.0080 on 15,287. So this is a representative subset,
 not a favourable slice, and the main result is independently confirmed.
 
-**There is a large register gap, and A1 closes a third of it.**
+**There is a large register gap, and MathLibDocstrings closes a third of it.**
 
 | Model | base-NL R@1 | docstring R@1 | gap |
 |---|---|---|---|
 | Paper baseline | 0.8577 | 0.5818 | **0.2759** |
-| + A1 docstrings | 0.8490 | 0.6587 | **0.1903** |
+| + MathLibDocstrings | 0.8490 | 0.6587 | **0.1903** |
 
 A model trained only on base NL is **27.6 points worse** when asked in Mathlib's
-own register. A1 closes **31%** of that gap.
+own register. MathLibDocstrings closes **31%** of that gap.
 
 **This is generalisation, not leakage.** The 1,497 query docstrings were never
-trained on. The +A1 model learned the register from the 16,851 *other* A1
+trained on. The +MathLibDocstrings model learned the register from the 16,851 *other* MathLibDocstrings
 docstrings and transferred it to unseen ones.
 
-### 9.8 Conclusion — what A1 is actually for
+### 9.8 Conclusion — what MathLibDocstrings is actually for
 
-**A1 is a register-coverage dataset, and it works.**
+**MathLibDocstrings is a register-coverage dataset, and it works.**
 
 The base training data describes every theorem in one voice: verbose LaTeX
 prose. Mathlib itself is written in another: terse, backtick-heavy, Lean
@@ -376,7 +376,7 @@ a quirk of this experiment — it is a real blind spot in the model the paper
 recipe produces, and nothing in the existing benchmark would ever have revealed
 it.
 
-Adding A1 closes 31% of that blind spot, for a measured cost of about
+Adding MathLibDocstrings closes 31% of that blind spot, for a measured cost of about
 **0.9 Recall@1 points** on the register the benchmark does test. An 8.8 : 1
 trade, in favour of the capability we previously had no way to see.
 
@@ -386,18 +386,18 @@ trade and none of the benefit. The −0.0080 in §9.4 is real and reproducible �
 it is just not the whole result, and on its own it is actively misleading about
 whether the dataset is worth having.
 
-**What caused the trade.** A1 was merged into the existing `nl_informal` field,
+**What caused the trade.** MathLibDocstrings was merged into the existing `nl_informal` field,
 so both registers compete for one encoder. The model got better at spanning them
 and slightly blurrier at the original — exactly the pattern in §9.5, where the
 only two pair types that declined are the only two that query with
 `nl_informal`.
 
-**The question is no longer whether A1 is useful. It is whether the trade is
+**The question is no longer whether MathLibDocstrings is useful. It is whether the trade is
 necessary.** Nothing forces the two registers to share a field.
 
 **Recommended next steps, re-ranked after §9.7:**
 
-1. **Give A1 its own view field** (`nl_docstring`) instead of merging into
+1. **Give MathLibDocstrings its own view field** (`nl_docstring`) instead of merging into
    `nl_informal`. If the trade is an artefact of the shared slot, this should
    keep most of the +0.0769 and recover the −0.0087. Highest value, and it
    directly tests the proposed mechanism.
@@ -408,7 +408,7 @@ necessary.** Nothing forces the two registers to share a field.
    GPU time beyond the eval itself.
 3. **Decide which register users actually type.** If Math2Vec serves people
    searching Lean, terse notation-heavy queries may be closer to real usage than
-   LaTeX prose — in which case the +A1 model may already be the better product
+   LaTeX prose — in which case the +MathLibDocstrings model may already be the better product
    model, benchmark regression notwithstanding. This is a team decision, not an
    experiment.
 4. **Explicit view-pair enumeration** (§12). §9.7 shows the
@@ -428,20 +428,20 @@ makes the trade look better still.
 ## 10. Caveats and open questions
 
 - **Evaluation register mismatch — CONFIRMED, no longer open.** Dev queries are
-  verbose LaTeX prose; A1 is terse docstring prose. §9.7 measured the effect
+  verbose LaTeX prose; MathLibDocstrings is terse docstring prose. §9.7 measured the effect
   directly: +0.0769 Recall@1 on docstring queries at 4.3 sigma, against −0.0087
   on the base register. The benchmark's single-register design hid the benefit
   entirely. Adding a standing docstring metric is recommendation 2 in §9.8.
 - **Some docstrings name rather than state.** For example,
   `MeasureTheory.condExp_mul_of_stronglyMeasurable_left` → *"Pull-out property
-  of the conditional expectation."* That is weak training signal. A1 carries
+  of the conditional expectation."* That is weak training signal. MathLibDocstrings carries
   `filter_label` and `doc_slip_flag` metadata suggesting some filtering already
   happened, but we have not audited what survived.
 - **Duplicate IDs in the base data.** `MathlibViews.jsonl` has 133,621 rows but
-  126,059 unique `concept_id`s. Pre-existing, not introduced by A1, but it is
+  126,059 unique `concept_id`s. Pre-existing, not introduced by MathLibDocstrings, but it is
   unclear whether those rows are deduplicated or silently upweighted.
 - **A corrected prediction.** This document originally claimed pair types 2–5
-  could not move. NL → Lean type moved the most of any pair type. A1 retrains
+  could not move. NL → Lean type moved the most of any pair type. MathLibDocstrings retrains
   the `nl_informal` encoder, not just the view inventory — see §7 and §9.5.
 - **One run per arm, one seed.** The primary effect (−0.0080 R@1) is close to
   plausible run-to-run variance. No replicates were run.
@@ -456,14 +456,14 @@ node:
 mkdir -p /gpfs/scrubbed/$USER/mathlib-ft && cd /gpfs/scrubbed/$USER/mathlib-ft
 git clone -b trainingdata-mathlibdocstring \
   https://github.com/uw-math-ai/math2vec.git repo
-mkdir -p logs && bash repo/finetune/a1_docstrings/setup_login.sh 2>&1 | tee logs/setup.log
+mkdir -p logs && bash repo/finetune/MathLibDocstrings/setup_login.sh 2>&1 | tee logs/setup.log
 
 sbatch smoke.slurm                      # ~20 min sanity check first
 
 sbatch --job-name=mv3_qwen8b_paper_ep2 \
   --export=ALL,RUN=mv3_qwen8b_paper_ep2 run.slurm
-sbatch --job-name=mv3_qwen8b_a1_ep2 \
-  --export=ALL,RUN=mv3_qwen8b_a1_ep2,EXTRA=data/a1_kept_concepts_v4.19.0.jsonl \
+sbatch --job-name=mv3_qwen8b_docstrings_ep2 \
+  --export=ALL,RUN=mv3_qwen8b_docstrings_ep2,EXTRA=data/MathLibDocstrings_v4.19.0.jsonl \
   run.slurm
 ```
 
@@ -475,8 +475,8 @@ Scratch is **not backed up** and is purged after 60 days without modification.
 Archive results when the runs finish:
 
 ```bash
-bash repo/finetune/a1_docstrings/collect.sh --archive \
-  mv3_qwen8b_paper_ep2 mv3_qwen8b_a1_ep2
+bash repo/finetune/MathLibDocstrings/collect.sh --archive \
+  mv3_qwen8b_paper_ep2 mv3_qwen8b_docstrings_ep2
 ```
 
 ## 12. Future work: explicit view-pair enumeration
@@ -519,13 +519,12 @@ whether to hold epochs or total steps fixed when comparing against this run.
 
 | File | Purpose |
 |---|---|
-| `experiments/a1_mathlib_docstrings/README.md` | this document |
+| `experiments/MathLibDocstrings/README.md` | this document |
 | `README.md` | operational how-to |
 | `setup_login.sh` | login-node setup: workspace, env, data, model cache |
 | `smoke.slurm` | debug-QOS sanity check |
 | `run.slurm` | the real run; `RUN` and `EXTRA` select the arm |
 | `collect.sh` | wall time, GPU-hours, `[extra]` counts, archiving |
 | `report.py` | builds the comparison tables from `metrics.json` |
-| `overlap_text.py` | measures how novel A1 docstrings are vs the base NL |
-| `docstring_eval.py`, `docstring_eval.slurm` | docstring-style eval on the 1,497 held-out A1 records |
-| `a1_eval_checkpoint.py`, `a1_eval.slurm` | optional GPU re-evaluation |
+| `overlap_text.py` | measures how novel MathLibDocstrings are vs the base NL |
+| `docstring_eval.py`, `docstring_eval.slurm` | docstring-style eval on the 1,497 held-out MathLibDocstrings records |

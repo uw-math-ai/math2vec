@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Does the +A1 model actually retrieve better from DOCSTRING-style queries?
+"""Does the +MathLibDocstrings model actually retrieve better from DOCSTRING-style queries?
 
 The main experiment evaluated only base-style queries (verbose LaTeX prose) and
-found the +A1 arm slightly worse. This script tests the hypothesis that explains
-that result: A1 improved docstring-style retrieval, which the main eval never
+found the +MathLibDocstrings arm slightly worse. This script tests the hypothesis that explains
+that result: MathLibDocstrings improved docstring-style retrieval, which the main eval never
 measured.
 
-THE HELD-OUT SET IS FREE. The 1,497 A1 records whose concept_id landed in the
+THE HELD-OUT SET IS FREE. The 1,497 MathLibDocstrings records whose concept_id landed in the
 dev set were dropped from training to prevent leakage (`drop_dev_id` in the
 [extra] line). No model has ever seen them, and their Lean statements are
 already in the 133,621-document eval corpus. They are a clean docstring-style
@@ -14,12 +14,12 @@ query set that cost nothing to build.
 
 For each model this measures TWO things on the SAME theorems:
 
-  docstring query -> Lean signature   (A1's Mathlib docstring as the query)
+  docstring query -> Lean signature   (MathLibDocstrings' Mathlib docstring as the query)
   base-NL query   -> Lean signature   (the base dataset's LaTeX prose, control)
 
 The control matters: it isolates "this model is better at docstrings" from
 "these happen to be easy theorems". Expected if the register hypothesis holds:
-the +A1 model wins on docstring queries and loses on base-NL queries.
+the +MathLibDocstrings model wins on docstring queries and loses on base-NL queries.
 
 Corpus construction, wrapping, encoding and scoring are taken from the trainer
 (`eval_retrieval`'s logic, `encode_texts`, `search_topk`), so numbers are
@@ -28,7 +28,7 @@ directly comparable to metrics.json.
 NEEDS A GPU -- run via docstring_eval.slurm.
 
     python docstring_eval.py \
-      --models checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_a1_ep2
+      --models checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_docstrings_ep2
 """
 import argparse
 import importlib.util
@@ -98,7 +98,7 @@ def main():
     ap.add_argument("--models", nargs="+", required=True,
                     help="run directories (the trainer saved each model in its own)")
     ap.add_argument("--base", default="data/MathlibViews.jsonl")
-    ap.add_argument("--a1", default="data/a1_kept_concepts_v4.19.0.jsonl")
+    ap.add_argument("--docstrings", default="data/MathLibDocstrings_v4.19.0.jsonl")
     ap.add_argument("--config_from", default=None,
                     help="metrics.json to replay settings from (default: first model's)")
     ap.add_argument("--k", type=int, default=10)
@@ -136,19 +136,19 @@ def main():
     print(f"\nbase: {len(records):,} concepts -> train {len(train_records):,} / "
           f"dev {len(dev_records):,}")
 
-    # --- the held-out docstring queries: A1 records whose concept_id is in dev ---
+    # --- the held-out docstring queries: MathLibDocstrings records whose concept_id is in dev ---
     dev_ids = {r.concept_id for r in dev_records}
-    a1_docstrings = {}
-    with open(args.a1) as f:
+    docstrings_by_id = {}
+    with open(args.docstrings) as f:
         for line in f:
             r = json.loads(line)
             cid = r["concept_id"]
             if cid in dev_ids:
                 t = (r.get("views", {}) or {}).get("nl_informal")
                 if t and t.strip():
-                    a1_docstrings[cid] = t
+                    docstrings_by_id[cid] = t
 
-    print(f"A1 docstrings for dev theorems: {len(a1_docstrings):,}")
+    print(f"docstrings for dev theorems: {len(docstrings_by_id):,}")
     print("  (should equal drop_dev_id from the [extra] line -- 1,497 for this run)")
 
     corpus_idx, corpus_docs = build_corpus(train_records + dev_records, "lean_signature")
@@ -157,7 +157,7 @@ def main():
     # Queries, and the base-NL control on exactly the same theorems.
     dev_by_id = {r.concept_id: r for r in dev_records}
     doc_q, doc_gold, base_q, base_gold, both = [], [], [], [], 0
-    for cid, text in a1_docstrings.items():
+    for cid, text in docstrings_by_id.items():
         if cid not in corpus_idx:
             continue
         doc_q.append(text)
@@ -200,14 +200,14 @@ def main():
     names = list(results)
     if len(names) >= 2:
         paper = next((n for n in names if "paper" in n), names[0])
-        a1    = next((n for n in names if n != paper), names[1])
-        print(f"\n{'='*72}\nCOMPARISON: {a1}  vs  {paper}\n{'='*72}")
-        hdr = f"{'query style':<14}{'metric':<10}{paper[:18]:>19}{a1[:18]:>19}{'delta':>10}"
+        docstrings    = next((n for n in names if n != paper), names[1])
+        print(f"\n{'='*72}\nCOMPARISON: {docstrings}  vs  {paper}\n{'='*72}")
+        hdr = f"{'query style':<14}{'metric':<10}{paper[:18]:>19}{docstrings[:18]:>19}{'delta':>10}"
         print(hdr); print("-" * len(hdr))
         verdict = {}
         for style, key in (("docstring", "docstring_query"), ("base-NL", "base_nl_query")):
             for metric in ("recall@1", "recall@5", f"recall@{k}", f"mrr@{k}"):
-                p, a = results[paper][key][metric], results[a1][key][metric]
+                p, a = results[paper][key][metric], results[docstrings][key][metric]
                 print(f"{style:<14}{metric:<10}{p:>19.4f}{a:>19.4f}{a-p:>+10.4f}")
                 if metric == "recall@1":
                     verdict[style] = a - p
@@ -221,7 +221,7 @@ def main():
         import math
         nq = results[paper]["docstring_query"]["n_queries"]
         pa = results[paper]["docstring_query"]["recall@1"]
-        pb = results[a1]["docstring_query"]["recall@1"]
+        pb = results[docstrings]["docstring_query"]["recall@1"]
         se = math.sqrt(pa*(1-pa)/nq + pb*(1-pb)/nq)
         floor = 2*se
         print(f"NOISE FLOOR  n={nq:,} queries -> 1 sigma = {se:.4f}, "
@@ -232,11 +232,11 @@ def main():
         print(f"  docstring-style R@1 change: {d_doc:+.4f}")
         print(f"  base-NL-style   R@1 change: {d_base:+.4f}")
         if d_doc > max(0.005, floor) and d_doc > d_base:
-            print("\n  => A1 HELPS docstring-style retrieval. The main eval missed a real\n"
-                  "     gain because it only ever asks base-style questions. Give A1 its\n"
+            print("\n  => MathLibDocstrings HELPS docstring-style retrieval. The main eval missed a real\n"
+                  "     gain because it only ever asks base-style questions. Give MathLibDocstrings its\n"
                   "     own view field rather than merging it into nl_informal.")
         elif d_doc > d_base + max(0.005, floor):
-            print("\n  => Directionally supports the register hypothesis: A1 does relatively\n"
+            print("\n  => Directionally supports the register hypothesis: MathLibDocstrings does relatively\n"
                   "     better on docstrings than on base-NL, though the absolute gain is\n"
                   "     small. A separate view field is still worth testing.")
         else:
@@ -245,7 +245,7 @@ def main():
                       "     cannot separate the models at this sample size.")
             else:
                 print("\n  => NO docstring-style gain either. The register hypothesis does not\n"
-                      "     explain the result; A1 as extra NL views did not help this model.\n"
+                      "     explain the result; MathLibDocstrings as extra NL views did not help this model.\n"
                       "     Reconsider before spending more GPU time on it.")
 
     json.dump({"results": results,

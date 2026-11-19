@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""How different is an A1 docstring from the NL the base data already has?
+"""How different is an MathLibDocstrings from the NL the base data already has?
 
 CPU only, ~1-2 min. Run this BEFORE committing GPU hours.
 
-For every A1 concept_id that already exists in the base data, compare A1's
+For every MathLibDocstrings concept_id that already exists in the base data, compare MathLibDocstrings'
 nl_informal against every NL view the base record already holds. If they are
 near-identical, the ~14.5k "merged" concepts add restatements rather than new
 information, and the experiment is more likely to come back flat.
 
     python overlap_text.py \
         --base data/MathlibViews.jsonl \
-        --a1   data/a1_kept_concepts_v4.19.0.jsonl
+        --docstrings   data/MathLibDocstrings_v4.19.0.jsonl
 """
 import argparse
 import difflib
@@ -47,7 +47,7 @@ def nl_views(rec):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="data/MathlibViews.jsonl")
-    ap.add_argument("--a1", default="data/a1_kept_concepts_v4.19.0.jsonl")
+    ap.add_argument("--docstrings", default="data/MathLibDocstrings_v4.19.0.jsonl")
     ap.add_argument("--sample", type=int, default=3000,
                     help="how many overlapping concepts to run fuzzy similarity on")
     ap.add_argument("--examples", type=int, default=6)
@@ -60,29 +60,29 @@ def main():
             base.setdefault(r["concept_id"], []).extend(nl_views(r))
 
     rows = []
-    with open(args.a1) as f:
+    with open(args.docstrings) as f:
         for line in f:
             r = json.loads(line)
             cid = r["concept_id"]
             if cid in base:
-                a1_nl = (r.get("views", {}) or {}).get("nl_informal") or ""
-                rows.append((cid, a1_nl, base[cid]))
+                doc_nl = (r.get("views", {}) or {}).get("nl_informal") or ""
+                rows.append((cid, doc_nl, base[cid]))
 
     print(f"base concepts with NL   : {len(base):,}")
-    print(f"A1 concepts overlapping : {len(rows):,}")
+    print(f"MathLibDocstrings concepts overlapping : {len(rows):,}")
     if not rows:
         print("no overlap -- nothing to compare")
         return
 
     exact = normed = 0
     no_base_nl = 0
-    for _, a1_nl, bviews in rows:
+    for _, doc_nl, bviews in rows:
         if not bviews:
             no_base_nl += 1
             continue
-        if any(a1_nl == b for b in bviews):
+        if any(doc_nl == b for b in bviews):
             exact += 1
-        if any(norm(a1_nl) == norm(b) for b in bviews):
+        if any(norm(doc_nl) == norm(b) for b in bviews):
             normed += 1
 
     n = len(rows)
@@ -91,16 +91,16 @@ def main():
     print(f"identical after normalisation           : {normed:,} ({100*normed/n:.1f}%)")
     if no_base_nl:
         print(f"base record had NO NL view at all       : {no_base_nl:,} "
-              f"({100*no_base_nl/n:.1f}%)  <- A1 is the only NL for these")
+              f"({100*no_base_nl/n:.1f}%)  <- MathLibDocstrings is the only NL for these")
 
     sample = rows if len(rows) <= args.sample else random.Random(42).sample(rows, args.sample)
     buckets = {"identical (>=0.99)": 0, "near-dup 0.90-0.99": 0, "similar 0.70-0.90": 0,
                "different 0.40-0.70": 0, "unrelated (<0.40)": 0}
     sims = []
-    for _, a1_nl, bviews in sample:
+    for _, doc_nl, bviews in sample:
         if not bviews:
             continue
-        best = max(difflib.SequenceMatcher(None, norm(a1_nl), norm(b)).ratio() for b in bviews)
+        best = max(difflib.SequenceMatcher(None, norm(doc_nl), norm(b)).ratio() for b in bviews)
         sims.append(best)
         if best >= 0.99:   buckets["identical (>=0.99)"] += 1
         elif best >= 0.90: buckets["near-dup 0.90-0.99"] += 1
@@ -120,23 +120,23 @@ def main():
         dup = buckets["identical (>=0.99)"] + buckets["near-dup 0.90-0.99"]
         print(f"\n  near-duplicate share: {100*dup/m:.1f}%")
         if dup / m > 0.5:
-            print("  => WARNING: most A1 docstrings restate the base NL. The ~14.5k merged\n"
+            print("  => WARNING: most MathLibDocstrings restate the base NL. The ~14.5k merged\n"
                   "     concepts add little; the experiment leans on the ~4.2k new ones.")
         elif dup / m > 0.2:
             print("  => MIXED: a sizeable minority are restatements.")
         else:
-            print("  => GOOD: A1 docstrings are genuinely different text from the base NL.")
+            print("  => GOOD: MathLibDocstrings are genuinely different text from the base NL.")
 
     print(f"\n--- {args.examples} random side-by-side examples ---")
-    for cid, a1_nl, bviews in random.Random(1).sample(sample, min(args.examples, len(sample))):
+    for cid, doc_nl, bviews in random.Random(1).sample(sample, min(args.examples, len(sample))):
         best_b, best_r = "", 0.0
         for b in bviews:
-            r = difflib.SequenceMatcher(None, norm(a1_nl), norm(b)).ratio()
+            r = difflib.SequenceMatcher(None, norm(doc_nl), norm(b)).ratio()
             if r >= best_r:
                 best_r, best_b = r, b
         print(f"\n[{cid}]  similarity={best_r:.3f}")
         print(f"  BASE: {best_b[:240]}")
-        print(f"  A1  : {a1_nl[:240]}")
+        print(f"  MathLibDocstrings  : {doc_nl[:240]}")
 
 
 if __name__ == "__main__":

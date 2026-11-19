@@ -3,9 +3,9 @@
 # Post-job collection: wall time, GPU-hours, [extra] counts, and (optionally)
 # archiving to the backed-up project folder. Login node; no GPU.
 #
-#   bash collect.sh mv3_qwen8b_a1_ep2
-#   bash collect.sh mv3_qwen8b_a1_ep2 mv3_qwen8b_paper_ep2
-#   bash collect.sh --archive mv3_qwen8b_a1_ep2 mv3_qwen8b_paper_ep2
+#   bash collect.sh mv3_qwen8b_docstrings_ep2
+#   bash collect.sh mv3_qwen8b_docstrings_ep2 mv3_qwen8b_paper_ep2
+#   bash collect.sh --archive mv3_qwen8b_docstrings_ep2 mv3_qwen8b_paper_ep2
 #
 # Writes checkpoints/<RUN>/runinfo.json, which report.py picks up for the
 # Wall / GPU-h columns. Re-runnable. --archive only ever copies, never deletes.
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 WORK=/gpfs/scrubbed/$USER/mathlib-ft
-ARCHIVE_ROOT=/gpfs/projects/mathai/math2vec/experiments/$USER/a1_docstrings
+ARCHIVE_ROOT=/gpfs/projects/mathai/math2vec/experiments/$USER/MathLibDocstrings
 
 DO_ARCHIVE=0
 if [ "${1:-}" = "--archive" ]; then DO_ARCHIVE=1; shift; fi

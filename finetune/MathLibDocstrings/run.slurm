@@ -4,15 +4,15 @@
 # Same as finetune/run_v3.slurm but with the --partition line dropped
 # (Tillicum assigns partitions automatically).
 #
-# Run the A1 experiment and, for a same-dev-set comparison, the baseline:
+# Run the MathLibDocstrings experiment and, for a same-dev-set comparison, the baseline:
 #
-#   sbatch --export=ALL,RUN=mv3_qwen8b_a1_ep2,EXTRA=data/a1_kept_concepts_v4.19.0.jsonl run.slurm
+#   sbatch --export=ALL,RUN=mv3_qwen8b_docstrings_ep2,EXTRA=data/MathLibDocstrings_v4.19.0.jsonl run.slurm
 #   sbatch --export=ALL,RUN=mv3_qwen8b_paper_ep2 run.slurm
 #
 # Add --account=<account> to the sbatch line if 'mathai' is rejected.
 #
 # EXTRA is folded into TRAINING ONLY after the module-level split (seed 42), so
-# both runs evaluate on an identical dev set. Runtime scales with how many A1
+# both runs evaluate on an identical dev set. Runtime scales with how many MathLibDocstrings
 # concept_ids are NEW to the base data: all-merge ~8 h, all-new ~9.3 h.
 # normal QOS allows 16 GPUs / 24 h, so two runs can queue concurrently.
 # ---------------------------------------------------------------------------

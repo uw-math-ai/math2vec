@@ -1,6 +1,6 @@
-# A1 — Mathlib theorem/docstring pairs
+# MathLibDocstrings — Mathlib theorem/docstring pairs
 
-`a1_kept_concepts_v4.19.0.jsonl` — 18,747 Lean declarations from Mathlib paired
+`MathLibDocstrings_v4.19.0.jsonl` — 18,747 Lean declarations from Mathlib paired
 with their human-written Mathlib docstrings.
 
 | | |
@@ -14,7 +14,7 @@ with their human-written Mathlib docstrings.
 | sha256 | `da823e1476c4b1b6dee9ba1efeaa320768ab5605f2b61796001828dc917345d3` |
 
 ```bash
-sha256sum a1_kept_concepts_v4.19.0.jsonl
+sha256sum MathLibDocstrings_v4.19.0.jsonl
 ```
 
 ## Schema
@@ -47,39 +47,43 @@ Matches the trainer's concept schema, so it can be passed directly to
 Every record carries exactly two views (one NL, one Lean). `hard_negatives` is
 present but empty for all records.
 
+> `metadata.source` is the literal string `"A1_mathlib_docstring"` in all 18,747
+> records — `A1` was this dataset's working codename. The value is left as-is
+> because changing it would alter the file and invalidate the checksum above.
+
 ## Relationship to `MathlibViews.jsonl`
 
 The main training set (`MathlibViews.jsonl`, 133,621 rows / 126,059 unique
 concepts) is **not in this repo** — it lives on Hugging Face at
-`uw-math-ai/Math2Vec-embedding-dataset`. A1 overlaps it heavily:
+`uw-math-ai/Math2Vec-embedding-dataset`. MathLibDocstrings overlaps it heavily:
 
 | | Count | Share |
 |---|---|---|
-| A1 concepts already in `MathlibViews.jsonl` | 14,501 | 77.4% |
-| A1 concepts new to it | 4,246 | 22.6% |
+| MathLibDocstrings concepts already in `MathlibViews.jsonl` | 14,501 | 77.4% |
+| MathLibDocstrings concepts new to it | 4,246 | 22.6% |
 
-For the 14,501 overlapping concepts, **A1's docstring is not a restatement of
+For the 14,501 overlapping concepts, **MathLibDocstrings' docstring is not a restatement of
 the NL already present**: 0 are byte-identical, median text similarity is 0.129,
 and the near-duplicate share is 0.1%. The two sources write in different
-registers — the base data in verbose LaTeX prose, A1 in terse Mathlib prose
+registers — the base data in verbose LaTeX prose, MathLibDocstrings in terse Mathlib prose
 using Lean notation:
 
 > **Base:** *Let $E$ be a vector space over an ordered scalar field
 > $\mathbb{K}$, and let $s \subseteq E$ be a convex set...*
 >
-> **A1:** *If `x ∈ closure s` and `y ∈ interior s`, then the segment `(x, y]` is
+> **MathLibDocstrings:** *If `x ∈ closure s` and `y ∈ interior s`, then the segment `(x, y]` is
 > included in `interior s`.*
 
-Measure this yourself with `finetune/a1_docstrings/overlap_text.py`.
+Measure this yourself with `finetune/MathLibDocstrings/overlap_text.py`.
 
 ## What it is good for
 
 Fine-tuning measurably improves retrieval from **docstring-style** queries
 (+0.0769 Recall@1, 4.3 sigma) at a small cost on base-register queries
 (−0.0087). A model trained only on `MathlibViews.jsonl` is 27.6 Recall@1 points
-worse when asked in Mathlib's own register; A1 closes 31% of that gap.
+worse when asked in Mathlib's own register; MathLibDocstrings closes 31% of that gap.
 
-Full results: [`experiments/a1_mathlib_docstrings/README.md`](../../experiments/a1_mathlib_docstrings/README.md).
+Full results: [`experiments/MathLibDocstrings/README.md`](../../experiments/MathLibDocstrings/README.md).
 
 ## Known caveats
 
@@ -94,13 +98,13 @@ Full results: [`experiments/a1_mathlib_docstrings/README.md`](../../experiments/
 
 ## Usage
 
-`finetune/a1_docstrings/setup_login.sh` stages this file into a training
+`finetune/MathLibDocstrings/setup_login.sh` stages this file into a training
 workspace and verifies its checksum. To use it directly:
 
 ```bash
 python finetune/train_qwen_mnrl_multiview_v3_tg.py \
   --local_jsonl data/MathlibViews.jsonl \
-  --extra_train_jsonl dataset/a1_mathlib_docstrings/a1_kept_concepts_v4.19.0.jsonl \
+  --extra_train_jsonl dataset/MathLibDocstrings/MathLibDocstrings_v4.19.0.jsonl \
   ...
 ```
 
