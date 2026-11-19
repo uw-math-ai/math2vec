@@ -137,8 +137,8 @@ The one place the example count actually rises is the **4,246 genuinely new
 theorems**, which add roughly **3.5%** more training concepts to Arm 2.
 
 > A follow-on idea — enumerating all three pairs as explicit training examples
-> rather than sampling two at random — is written up in
-> `PROPOSAL_explicit_view_pairs.md`. It is not part of this run.
+> rather than sampling two at random — is discussed in §12. It is not part of
+> this run.
 
 ## 5. Why the comparison is valid
 
@@ -146,7 +146,7 @@ theorems**, which add roughly **3.5%** more training concepts to Arm 2.
 that would touch dev are dropped. The evaluation set and retrieval corpus are
 therefore byte-identical between the two arms.
 
-This is verified rather than assumed: `a1_report.py` prints a **dev-set identity
+This is verified rather than assumed: `report.py` prints a **dev-set identity
 check** as the first thing in its output. Both arms must agree on
 `concepts_total`, `train`, `dev`, `n_dev_used` and `corpus_size`. If they do
 not, the tool prints a warning and the comparison should be discarded.
@@ -204,7 +204,7 @@ Recall@1 would be a strong result; a change of under a point is within noise.
 ## 9. Results
 
 Both arms completed successfully with exit code 0, no OOM, no errors.
-Generated with `a1_collect.sh` and `a1_report.py`.
+Generated with `collect.sh` and `report.py`.
 
 ### 9.1 Run details
 
@@ -316,7 +316,7 @@ second register into a single-register evaluation. This tested that directly.
 
 **Method.** Same two saved models, same 133,621-document `lean_signature`
 corpus, same retrieval task, same delta formula. The only thing that changes is
-the text of the query. Run as job `495410` via `a1_docstring_eval.slurm`;
+the text of the query. Run as job `495410` via `docstring_eval.slurm`;
 no retraining.
 
 The query set was free. The **1,497 A1 records whose theorem landed in the dev
@@ -411,13 +411,10 @@ necessary.** Nothing forces the two registers to share a field.
    LaTeX prose — in which case the +A1 model may already be the better product
    model, benchmark regression notwithstanding. This is a team decision, not an
    experiment.
-4. **Explicit view-pair enumeration** (`PROPOSAL_explicit_view_pairs.md`) —
-   **re-ranked upward.** It was previously deprioritised on the theory that it
-   would amplify a degradation. §9.7 shows those pairs were teaching a real and
-   valuable register correspondence, so enumerating `(base_NL, docstring)` pairs
-   may amplify the *gain* instead. Most attractive combined with step 1, where
-   the pairing becomes an explicit `nl_informal` ↔ `nl_docstring` signal rather
-   than two texts crowding one field.
+4. **Explicit view-pair enumeration** (§12). §9.7 shows the
+   `(base_NL, docstring)` pairs were teaching a real register correspondence, so
+   enumerating them exhaustively instead of sampling may amplify the gain. Most
+   attractive combined with step 1.
 5. **Ablation on the 3,847 new-theorem concepts — downgraded.** The gain was
    measured on dev theorems that are not among the new concepts, so it comes
    from register transfer, not added coverage. Less informative than it looked.
@@ -448,26 +445,26 @@ makes the trade look better still.
   the `nl_informal` encoder, not just the view inventory — see §7 and §9.5.
 - **One run per arm, one seed.** The primary effect (−0.0080 R@1) is close to
   plausible run-to-run variance. No replicates were run.
-- Further questions are tracked in §10 of `PROPOSAL_explicit_view_pairs.md`.
+- Open design questions for the follow-on idea are in §12.
 
 ## 11. Reproducing this run
 
-Full setup instructions are in `a1_README.md`. In brief, from a Tillicum login
+Full setup instructions are in `README.md`. In brief, from a Tillicum login
 node:
 
 ```bash
 mkdir -p /gpfs/scrubbed/$USER/mathlib-ft && cd /gpfs/scrubbed/$USER/mathlib-ft
 git clone -b trainingdata-mathlibdocstring \
   https://github.com/uw-math-ai/math2vec.git repo
-mkdir -p logs && bash repo/slurmscripts/a1_setup_login.sh 2>&1 | tee logs/setup.log
+mkdir -p logs && bash repo/finetune/a1_docstrings/setup_login.sh 2>&1 | tee logs/setup.log
 
-sbatch a1_smoke.slurm                      # ~20 min sanity check first
+sbatch smoke.slurm                      # ~20 min sanity check first
 
 sbatch --job-name=mv3_qwen8b_paper_ep2 \
-  --export=ALL,RUN=mv3_qwen8b_paper_ep2 a1_run.slurm
+  --export=ALL,RUN=mv3_qwen8b_paper_ep2 run.slurm
 sbatch --job-name=mv3_qwen8b_a1_ep2 \
   --export=ALL,RUN=mv3_qwen8b_a1_ep2,EXTRA=data/a1_kept_concepts_v4.19.0.jsonl \
-  a1_run.slurm
+  run.slurm
 ```
 
 Slurm account `mathai`; QOS `debug`, `interactive`, `normal`. No `--partition`
@@ -478,22 +475,57 @@ Scratch is **not backed up** and is purged after 60 days without modification.
 Archive results when the runs finish:
 
 ```bash
-bash repo/slurmscripts/a1_collect.sh --archive \
+bash repo/finetune/a1_docstrings/collect.sh --archive \
   mv3_qwen8b_paper_ep2 mv3_qwen8b_a1_ep2
 ```
 
-## 12. Files
+## 12. Future work: explicit view-pair enumeration
+
+Recorded here rather than as a separate planning document, since it has not been
+run and may never be.
+
+**The idea.** A concept today contributes **one training row per epoch**;
+`MultiViewBaseDataset.__len__` returns `len(records)` and `__getitem__` draws
+`random.sample(all_views, 2)`. A merged concept with three views therefore gets
+only **2 random draws from 3 possible pairs** across 2 epochs. Enumerating all
+pairs as explicit rows would make that coverage exhaustive rather than
+stochastic. It adds no new data.
+
+Two things were measured while scoping it, and are worth keeping:
+
+**In-batch false negatives are not a problem at this batch size.**
+`CachedMultipleNegativesRankingLoss` uses in-batch negatives, so two rows of one
+concept sharing a batch would train the model to push apart two descriptions of
+the same theorem. With `batch_size=16` and ~149,002 enumerated rows that happens
+about **4.4 times per epoch out of 9,313 batches (0.047%)** — negligible. No
+concept-aware batch sampler is needed, and no migration off `model.fit()`. This
+would return if batch size rose well above 16, or if GradCache widened the
+effective negative pool.
+
+**Implicit reweighting is the real design question.** Enumeration is a 3x
+upweighting of every concept that gained a second NL view: **14,501 concepts
+(12.1% of train) would supply 43,503 rows (29.2% of training)**. Which theorems
+get that boost tracks whichever happened to have a Mathlib docstring, not
+importance or difficulty. A `--max_pairs_per_concept` cap would bound it, but
+the right value is unknown without measuring the view-count distribution.
+
+**Cost.** 1.24x the steps, so roughly 10.3 h and ~$9.30 per arm rather than
+7.1 h and ~$6.40.
+
+**Other open choices:** all `C(n,2)` pairs vs cross-modal `(NL, Lean)` only; and
+whether to hold epochs or total steps fixed when comparing against this run.
+
+## 13. Files
 
 | File | Purpose |
 |---|---|
-| `a1_EXPERIMENT_SUMMARY.md` | this document |
-| `a1_README.md` | operational how-to |
-| `a1_setup_login.sh` | login-node setup: workspace, env, data, model cache |
-| `a1_smoke.slurm` | debug-QOS sanity check |
-| `a1_run.slurm` | the real run; `RUN` and `EXTRA` select the arm |
-| `a1_collect.sh` | wall time, GPU-hours, `[extra]` counts, archiving |
-| `a1_report.py` | builds the comparison tables from `metrics.json` |
-| `a1_overlap_text.py` | measures how novel A1 docstrings are vs the base NL |
-| `a1_docstring_eval.py`, `a1_docstring_eval.slurm` | docstring-style eval on the 1,497 held-out A1 records |
+| `experiments/a1_mathlib_docstrings/README.md` | this document |
+| `README.md` | operational how-to |
+| `setup_login.sh` | login-node setup: workspace, env, data, model cache |
+| `smoke.slurm` | debug-QOS sanity check |
+| `run.slurm` | the real run; `RUN` and `EXTRA` select the arm |
+| `collect.sh` | wall time, GPU-hours, `[extra]` counts, archiving |
+| `report.py` | builds the comparison tables from `metrics.json` |
+| `overlap_text.py` | measures how novel A1 docstrings are vs the base NL |
+| `docstring_eval.py`, `docstring_eval.slurm` | docstring-style eval on the 1,497 held-out A1 records |
 | `a1_eval_checkpoint.py`, `a1_eval.slurm` | optional GPU re-evaluation |
-| `PROPOSAL_explicit_view_pairs.md` | follow-on idea, not scheduled |

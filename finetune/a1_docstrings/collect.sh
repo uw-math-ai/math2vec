@@ -3,11 +3,11 @@
 # Post-job collection: wall time, GPU-hours, [extra] counts, and (optionally)
 # archiving to the backed-up project folder. Login node; no GPU.
 #
-#   bash a1_collect.sh mv3_qwen8b_a1_ep2
-#   bash a1_collect.sh mv3_qwen8b_a1_ep2 mv3_qwen8b_paper_ep2
-#   bash a1_collect.sh --archive mv3_qwen8b_a1_ep2 mv3_qwen8b_paper_ep2
+#   bash collect.sh mv3_qwen8b_a1_ep2
+#   bash collect.sh mv3_qwen8b_a1_ep2 mv3_qwen8b_paper_ep2
+#   bash collect.sh --archive mv3_qwen8b_a1_ep2 mv3_qwen8b_paper_ep2
 #
-# Writes checkpoints/<RUN>/runinfo.json, which a1_report.py picks up for the
+# Writes checkpoints/<RUN>/runinfo.json, which report.py picks up for the
 # Wall / GPU-h columns. Re-runnable. --archive only ever copies, never deletes.
 # ---------------------------------------------------------------------------
 set -euo pipefail
@@ -18,7 +18,7 @@ ARCHIVE_ROOT=/gpfs/projects/mathai/math2vec/experiments/$USER/a1_docstrings
 DO_ARCHIVE=0
 if [ "${1:-}" = "--archive" ]; then DO_ARCHIVE=1; shift; fi
 if [ $# -eq 0 ]; then
-  echo "usage: bash a1_collect.sh [--archive] RUN_NAME [RUN_NAME ...]" >&2
+  echo "usage: bash collect.sh [--archive] RUN_NAME [RUN_NAME ...]" >&2
   exit 2
 fi
 
@@ -63,7 +63,7 @@ for RUN in "$@"; do
     fi
   fi
 
-  # Sidecar for a1_report.py
+  # Sidecar for report.py
   python3 - "$OUT" "$ELAPSED" "$GPUH" "$STATE" "${JOBID:-}" "${LOG:-}" <<'PY'
 import json, sys
 out, elapsed, gpuh, state, jobid, log = sys.argv[1:7]
@@ -106,4 +106,4 @@ if [ "$DO_ARCHIVE" = "1" ]; then
 fi
 
 echo
-echo "Next: python a1_report.py checkpoints/<RUN> [checkpoints/<OTHER_RUN>]"
+echo "Next: python report.py checkpoints/<RUN> [checkpoints/<OTHER_RUN>]"

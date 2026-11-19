@@ -4,13 +4,13 @@
 CPU only -- reads what the trainer already wrote. No GPU, no model loading.
 
     # one run: shows base Qwen3-8B vs this run's fine-tuned model
-    python a1_report.py checkpoints/mv3_qwen8b_a1_ep2
+    python report.py checkpoints/mv3_qwen8b_a1_ep2
 
     # two runs: adds the cross-run A1-vs-paper comparison (the experiment)
-    python a1_report.py checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_a1_ep2
+    python report.py checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_a1_ep2
 
     # markdown for pasting into a writeup
-    python a1_report.py --markdown checkpoints/*_ep2 > results.md
+    python report.py --markdown checkpoints/*_ep2 > results.md
 
 Each argument is a run directory (or a metrics.json path directly).
 """
@@ -43,7 +43,7 @@ def load_run(path):
     d["_run"] = run
     d["_path"] = mp
     d["_is_a1"] = bool(extra.get("extra_in"))
-    # optional sidecar from a1_collect.sh
+    # optional sidecar from collect.sh
     ri = os.path.join(os.path.dirname(mp), "runinfo.json")
     d["_runinfo"] = json.load(open(ri)) if os.path.isfile(ri) else {}
     return d
@@ -225,10 +225,10 @@ def main():
         print(f"Only {have} was supplied, so the paper-vs-A1 table is omitted.\n"
               f"Pass both run directories to get it. To produce the {want}:\n")
         if a1_arm:
-            print("  sbatch --export=ALL,RUN=mv3_qwen8b_paper_ep2 a1_run.slurm")
+            print("  sbatch --export=ALL,RUN=mv3_qwen8b_paper_ep2 run.slurm")
         else:
             print("  sbatch --export=ALL,RUN=mv3_qwen8b_a1_ep2,"
-                  "EXTRA=data/a1_kept_concepts_v4.19.0.jsonl a1_run.slurm")
+                  "EXTRA=data/a1_kept_concepts_v4.19.0.jsonl run.slurm")
 
     head("Per-pair-type detail: base vs fine-tuned, each run", md)
     for d in runs:

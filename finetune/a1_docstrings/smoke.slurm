@@ -8,8 +8,8 @@
 # warmup steps spread over only ~1.3k batches. Read the [extra] counts and the
 # PASS/FAIL lines, nothing else.
 #
-#   sbatch a1_smoke.slurm
-#   sbatch --account=<account-from-setup-step-1> a1_smoke.slurm   # if rejected
+#   sbatch smoke.slurm
+#   sbatch --account=<account-from-setup-step-1> smoke.slurm   # if rejected
 #
 # No --partition: Tillicum assigns it automatically (as run_benchmarking.slurm
 # already relies on).

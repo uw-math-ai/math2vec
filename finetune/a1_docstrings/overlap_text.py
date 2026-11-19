@@ -8,7 +8,7 @@ nl_informal against every NL view the base record already holds. If they are
 near-identical, the ~14.5k "merged" concepts add restatements rather than new
 information, and the experiment is more likely to come back flat.
 
-    python a1_overlap_text.py \
+    python overlap_text.py \
         --base data/MathlibViews.jsonl \
         --a1   data/a1_kept_concepts_v4.19.0.jsonl
 """

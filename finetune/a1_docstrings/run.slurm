@@ -6,8 +6,8 @@
 #
 # Run the A1 experiment and, for a same-dev-set comparison, the baseline:
 #
-#   sbatch --export=ALL,RUN=mv3_qwen8b_a1_ep2,EXTRA=data/a1_kept_concepts_v4.19.0.jsonl a1_run.slurm
-#   sbatch --export=ALL,RUN=mv3_qwen8b_paper_ep2 a1_run.slurm
+#   sbatch --export=ALL,RUN=mv3_qwen8b_a1_ep2,EXTRA=data/a1_kept_concepts_v4.19.0.jsonl run.slurm
+#   sbatch --export=ALL,RUN=mv3_qwen8b_paper_ep2 run.slurm
 #
 # Add --account=<account> to the sbatch line if 'mathai' is rejected.
 #

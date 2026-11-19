@@ -25,9 +25,9 @@ Corpus construction, wrapping, encoding and scoring are taken from the trainer
 (`eval_retrieval`'s logic, `encode_texts`, `search_topk`), so numbers are
 directly comparable to metrics.json.
 
-NEEDS A GPU -- run via a1_docstring_eval.slurm.
+NEEDS A GPU -- run via docstring_eval.slurm.
 
-    python a1_docstring_eval.py \
+    python docstring_eval.py \
       --models checkpoints/mv3_qwen8b_paper_ep2 checkpoints/mv3_qwen8b_a1_ep2
 """
 import argparse

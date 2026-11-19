@@ -8,7 +8,7 @@
 #   mkdir -p /gpfs/scrubbed/$USER/mathlib-ft && cd /gpfs/scrubbed/$USER/mathlib-ft
 #   git clone -b trainingdata-mathlibdocstring \
 #     https://github.com/uw-math-ai/math2vec.git repo
-#   bash repo/slurmscripts/a1_setup_login.sh 2>&1 | tee logs/setup.log
+#   bash repo/finetune/a1_docstrings/setup_login.sh 2>&1 | tee logs/setup.log
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -16,6 +16,7 @@ WORK=/gpfs/scrubbed/$USER/mathlib-ft
 ENVDIR=/gpfs/scrubbed/$USER/conda-envs/mathlib-ft
 BRANCH=trainingdata-mathlibdocstring
 A1=a1_kept_concepts_v4.19.0.jsonl
+A1_SRC=repo/dataset/a1_mathlib_docstrings/$A1
 A1_SHA=da823e1476c4b1b6dee9ba1efeaa320768ab5605f2b61796001828dc917345d3
 
 echo "############ 1. ORIENT ############"
@@ -36,7 +37,7 @@ else
   git clone -b "$BRANCH" https://github.com/uw-math-ai/math2vec.git repo
 fi
 cp repo/finetune/train_qwen_mnrl_multiview_v3_tg.py .
-cp repo/slurmscripts/a1_smoke.slurm repo/slurmscripts/a1_run.slurm .
+cp repo/finetune/a1_docstrings/smoke.slurm repo/finetune/a1_docstrings/run.slurm .
 echo "repo at $(git -C repo rev-parse --short HEAD) on $(git -C repo rev-parse --abbrev-ref HEAD)"
 ls -la "$WORK"
 
@@ -56,7 +57,7 @@ python -c "import torch, sentence_transformers; print('torch', torch.__version__
 
 echo; echo "############ 4. DATA ############"
 cd "$WORK"
-cp -n "repo/$A1" "data/$A1"
+cp -n "$A1_SRC" "data/$A1"
 echo "$A1_SHA  data/$A1" | sha256sum -c -
 
 if [ ! -f data/MathlibViews.jsonl ]; then
@@ -104,4 +105,4 @@ huggingface-cli download Qwen/Qwen3-Embedding-0.6B   # smoke test
 huggingface-cli download Qwen/Qwen3-Embedding-8B     # real run
 du -sh "$HF_HOME"
 
-echo; echo "SETUP DONE. Next:  cd $WORK && sbatch a1_smoke.slurm"
+echo; echo "SETUP DONE. Next:  cd $WORK && sbatch smoke.slurm"

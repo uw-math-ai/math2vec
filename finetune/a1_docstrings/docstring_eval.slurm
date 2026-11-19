@@ -10,8 +10,8 @@
 #
 # No retraining. One GPU, mostly corpus encoding (~133k docs x 2 models).
 #
-#   sbatch a1_docstring_eval.slurm
-#   sbatch --account=<account> a1_docstring_eval.slurm      # if 'mathai' rejected
+#   sbatch docstring_eval.slurm
+#   sbatch --account=<account> docstring_eval.slurm      # if 'mathai' rejected
 # ---------------------------------------------------------------------------
 #SBATCH --job-name=mv3_docstring_eval
 #SBATCH --account=mathai
@@ -45,7 +45,7 @@ OUT=${OUT:-docstring_eval.json}
 echo "=== node $(hostname) | job $SLURM_JOB_ID | $(date) ==="
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
-python repo/slurmscripts/a1_docstring_eval.py \
+python repo/finetune/a1_docstrings/docstring_eval.py \
   --models "$PAPER" "$A1" \
   --base data/MathlibViews.jsonl \
   --a1   data/a1_kept_concepts_v4.19.0.jsonl \
