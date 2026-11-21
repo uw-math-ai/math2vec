@@ -24,8 +24,17 @@
 
 set -euo pipefail
 
-module load conda/Miniforge3-25.3.1-3
-conda activate /gpfs/scrubbed/$USER/conda-envs/math2vec
+# Uses the conda env that was active when you ran sbatch (sbatch passes it through).
+# No `module load conda` here: Tillicum's conda module refuses to load in a job that inherits CONDA_PREFIX.
+# With no env active, falls back to the scrubbed env below.
+ENV=${CONDA_PREFIX:-/gpfs/scrubbed/$USER/conda-envs/math2vec}
+if [ ! -x "$ENV/bin/python" ]; then
+  echo "No conda env at $ENV. Create it first: conda create -p $ENV python=3.11, then pip install -r finetune/requirements.txt" >&2
+  exit 1
+fi
+export PATH=$ENV/bin:$PATH
+export CONDA_PREFIX=$ENV
+echo "python: $(which python)"
 
 REPO=${SLURM_SUBMIT_DIR:-$PWD}
 if [ ! -f "$REPO/finetune/train_qwen_mnrl_v2.py" ]; then
