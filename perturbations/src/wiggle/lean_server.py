@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import threading
 from dataclasses import dataclass, field
@@ -155,6 +156,37 @@ class _PendingResponse:
 
 
 _PRELUDE = "import Mathlib\nimport Wiggle\n"
+
+_IMPORT_LINE_RE = re.compile(r"^import\s+(\S+)\s*$")
+
+
+def normalize_header(code: str, prelude: str = _PRELUDE) -> str:
+    """Give ``code`` the server's import header when it needs nothing more.
+
+    Lean restarts a document's worker, re-importing Mathlib (~90s), whenever
+    the import header changes. Callers send ``import Mathlib`` alone and
+    ``import Mathlib`` + ``import Wiggle`` in alternation, so without this
+    every switch paid the full import. Wiggle adds only tactics and commands
+    (no instances, simp lemmas or notation), so a statement elaborates the
+    same under either header. Code that imports anything outside the
+    prelude is returned unchanged.
+    """
+    allowed = {m.group(1) for line in prelude.splitlines()
+               if (m := _IMPORT_LINE_RE.match(line.strip()))}
+    lines = code.split("\n")
+    imports: set[str] = set()
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        m = _IMPORT_LINE_RE.match(stripped)
+        if m:
+            imports.add(m.group(1))
+        elif stripped:
+            break
+        i += 1
+    if not imports or not imports <= allowed:
+        return code
+    return prelude + "\n" + "\n".join(lines[i:])
 
 
 class LeanLspServer:
@@ -317,9 +349,11 @@ class LeanLspServer:
         work is elaborating the user's trailing snippet — typically 0.1–0.5s
         once the worker is warm.
 
-        The ``code`` argument should be a complete Lean source file (the
-        existing helpers in :mod:`wiggle.lean_runner` prepend their own
-        ``import`` lines, which is fine: identical prefixes share snapshots).
+        The ``code`` argument should be a complete Lean source file. Its
+        ``import`` lines are replaced by the server prelude when they ask for
+        nothing beyond it (see :func:`normalize_header`), so every call shares
+        one header and Mathlib is imported once per server, not once per
+        header switch.
         """
         self._check_alive()
 
@@ -334,7 +368,7 @@ class LeanLspServer:
             "textDocument/didChange",
             {
                 "textDocument": {"uri": self._doc_uri, "version": version},
-                "contentChanges": [{"text": code}],
+                "contentChanges": [{"text": normalize_header(code, self._prelude)}],
             },
         )
         self._send_request(

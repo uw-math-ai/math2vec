@@ -590,3 +590,35 @@ class TestExtractGoal:
     def test_empty_context_leaves_type_unchanged(self) -> None:
         out = self._extract("info:\ntheorem foo.extracted_1 : ∀ (n : ℕ), n = n := sorry\n")
         assert out == ("theorem foo.extracted_1", "∀ (n : ℕ), n = n")
+
+
+class TestNormalizeHeader:
+    """Every snippet must share one import header, or Lean re-imports Mathlib."""
+
+    def test_mathlib_only_gets_server_prelude(self) -> None:
+        from wiggle.lean_server import _PRELUDE, normalize_header
+
+        out = normalize_header("import Mathlib\n\nexample : True := trivial\n")
+        assert out.startswith(_PRELUDE)
+        assert out.endswith("example : True := trivial\n")
+
+    def test_both_headers_become_identical(self) -> None:
+        from wiggle.lean_server import normalize_header
+
+        a = normalize_header("import Mathlib\n\nexample : 1 = 1 := rfl\n")
+        b = normalize_header("import Mathlib\nimport Wiggle\n\nexample : 1 = 1 := rfl\n")
+        c = normalize_header("import Wiggle\n\nexample : 1 = 1 := rfl\n")
+        assert a == b == c
+
+    def test_body_kept_verbatim(self) -> None:
+        from wiggle.lean_server import normalize_header
+
+        body = "universe u_1\n\nset_option autoImplicit false in\nexample : ∀ {α : Type u_1}, True := by sorry\n"
+        assert normalize_header("import Mathlib\n\n" + body).endswith(body)
+
+    def test_other_imports_left_alone(self) -> None:
+        from wiggle.lean_server import normalize_header
+
+        code = "import Mathlib\nimport Batteries.Foo\n\nexample : True := trivial\n"
+        assert normalize_header(code) == code
+        assert normalize_header("example : True := trivial\n") == "example : True := trivial\n"
