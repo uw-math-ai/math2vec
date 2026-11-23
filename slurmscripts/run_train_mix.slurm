@@ -21,6 +21,15 @@ conda activate /gpfs/projects/mathai/math2vec/envs/math2vec
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export TOKENIZERS_PARALLELISM=false
 
+# Keep the 15GB model + dataset caches off the small home quota
+export HF_HOME=/gpfs/scrubbed/$USER/hf_cache
+export HF_DATASETS_CACHE=$HF_HOME/datasets
+export HUGGINGFACE_HUB_CACHE=$HF_HOME/hub
+export TORCH_HOME=$HF_HOME/torch
+export XDG_CACHE_HOME=$HF_HOME
+export TMPDIR=/gpfs/scrubbed/$USER/tmp
+mkdir -p "$HF_HOME" "$HF_DATASETS_CACHE" "$HUGGINGFACE_HUB_CACHE" "$TORCH_HOME" "$TMPDIR"
+
 # Fine-tune Qwen3-Embedding on Mathlib pairs + the 2000 medium-difficulty rows
 cd finetune
 time python train_qwen_mnrl_mix_extra.py \
