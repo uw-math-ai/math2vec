@@ -1,0 +1,6 @@
+total 20K
+-rw-r--r-- 1 mayidan all       0 Nov 16 14:50 manifest.txt
+-rw-r--r-- 1 mayidan all     351 Nov 16 14:50 sacct.txt
+-rw-r--r-- 1 mayidan all     232 Nov 16 14:50 squeue.txt
+-rw-r--r-- 1 mayidan mathai  199 Oct 26 22:05 task_stats.json
+-rw-r--r-- 1 mayidan mathai 5.6K Nov  9 17:34 wiggle-blueprint_442625.out
