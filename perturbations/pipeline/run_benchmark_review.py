@@ -326,6 +326,20 @@ def token_diff(before: str, after: str, max_edits: int = 6) -> str:
 # ── Per-anchor worker ─────────────────────────────────────────────────────────
 
 
+_LEVEL_AFTER_SORT_RE = re.compile(
+    r"\b(?:Type|Sort)\s+(\((?:[^()]|\([^()]*\))*\)|[^\s()\[\]{},:→]+)")
+_EXPLICIT_LEVELS_RE = re.compile(r"\.\{([^{}]*)\}")
+_LEVEL_NAME_RE = re.compile(r"[A-Za-z_][\w₀-₉']*")
+_LEVEL_KEYWORDS = {"max", "imax"}
+
+
+def universe_names(type_str: str) -> list[str]:
+    """Universe level names a statement uses (``Type u_1``, ``Sort (max u v)``, ``f.{u}``)."""
+    levels = _LEVEL_AFTER_SORT_RE.findall(type_str) + _EXPLICIT_LEVELS_RE.findall(type_str)
+    names = {n for lvl in levels for n in _LEVEL_NAME_RE.findall(lvl)}
+    return sorted(names - _LEVEL_KEYWORDS)
+
+
 def anchor_elaborates_closed(type_str: str) -> bool:
     """True iff ``type_str`` elaborates against Mathlib with no auto-bound names.
 
@@ -333,11 +347,17 @@ def anchor_elaborates_closed(type_str: str) -> bool:
     silently turns unknown identifiers (a project's section ``variable``s, a
     definition Mathlib lacks) into implicit arguments, so it accepts
     statements that don't mean what their source meant.
+
+    Universe names are declared up front: with ``autoImplicit false`` an
+    undeclared ``Type u_1`` is an error, and Mathlib's printed statements use
+    them everywhere. Declaring a universe adds no meaning the source lacked.
     """
     from wiggle.lean_runner import run_lean
 
+    universes = universe_names(type_str)
+    header = f"universe {' '.join(universes)}\n\n" if universes else ""
     output = run_lean(
-        "import Mathlib\n\nset_option autoImplicit false in\n"
+        f"import Mathlib\n\n{header}set_option autoImplicit false in\n"
         f"example : {type_str} := by sorry\n"
     )
     return re.search(r"\berror[:(]", output) is None

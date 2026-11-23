@@ -156,6 +156,9 @@ echo " cpus    : $CPUS"
 echo "──────────────────────────────────────────────────────────────────────"
 
 echo; echo "══ prepare anchors"
+# One-time: older runs keyed anchors by a non-unique dataset index and skipped
+# statements that only needed universe declarations. No-op once repaired.
+python -u pipeline/rekey_mathlib_run.py --run "$OUT"
 python -u pipeline/prepare_mathlib_full_anchors.py \
     --out "$ANCHORS" "${LIMIT_ARGS[@]}"
 

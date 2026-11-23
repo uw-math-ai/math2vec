@@ -288,8 +288,72 @@ def test_full_mathlib_anchors_keep_theorems_and_stable_ids(tmp_path: Path) -> No
     out = tmp_path / "anchors.jsonl"
     assert prep.write_anchors(prep.iter_jsonl(src), out, limit=None) == 1
     anchor = json.loads(out.read_text(encoding="utf-8"))
-    assert anchor["id"] == "mathlib_7"
+    assert anchor["id"] == prep.anchor_id("Nat.add_comm")
+    assert anchor["id"].startswith("mathlib_") and anchor["id"] != "mathlib_7"
     assert anchor["declaration"] == "Nat.add_comm"
     assert anchor["module"] == "Mathlib.Algebra.Group"
     assert anchor["type_str"].startswith("∀")
     assert anchor["pair_ids"] == ["mathlib:7"]
+
+
+def test_full_mathlib_ids_unique_when_dataset_index_repeats(tmp_path: Path) -> None:
+    prep = _load("prepare_mathlib_full_anchors")
+    rows = [
+        {"index": 6, "kind": "theorem", "name": "A.one", "module_name": "M", "type": "True"},
+        {"index": 6, "kind": "theorem", "name": "B.two", "module_name": "M", "type": "False → True"},
+        {"index": 6, "kind": "theorem", "name": "A.one", "module_name": "M", "type": "True"},
+    ]
+    src = tmp_path / "data.jsonl"
+    src.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    out = tmp_path / "anchors.jsonl"
+    assert prep.write_anchors(prep.iter_jsonl(src), out, limit=None) == 2
+    ids = [json.loads(line)["id"] for line in out.read_text(encoding="utf-8").splitlines()]
+    assert len(set(ids)) == 2
+
+
+class TestUniverseDeclarations:
+    def test_universe_names(self) -> None:
+        review = _load("run_benchmark_review")
+        assert review.universe_names("∀ {G : Type u_3} (x : G), x = x") == ["u_3"]
+        assert review.universe_names("∀ {α : Sort (max u v)} {β : Type (u + 1)}, True") == ["u", "v"]
+        assert review.universe_names("ULift.{u, w} α = β") == ["u", "w"]
+        assert review.universe_names("∀ {C : Type u₁}, True") == ["u₁"]
+        assert review.universe_names("∀ (n : Nat), n = n") == []
+
+    def test_closed_check_declares_universes(self) -> None:
+        review = _load("run_benchmark_review")
+        with mock.patch("wiggle.lean_runner.run_lean", return_value="") as run:
+            assert review.anchor_elaborates_closed("∀ {α : Type u_1} (a : α), a = a")
+        code = run.call_args[0][0]
+        assert "universe u_1\n" in code
+        assert code.index("universe u_1") < code.index("set_option autoImplicit false in")
+
+
+def test_rekey_mathlib_run(tmp_path: Path) -> None:
+    rekey = _load("rekey_mathlib_run")
+    prep = _load("prepare_mathlib_full_anchors")
+    run = tmp_path / "run"
+    run.mkdir()
+    anchors = [
+        {"id": "mathlib_6", "declaration": "A.ok", "type_str": "True", "skipped": None, "results": []},
+        {"id": "mathlib_6", "declaration": "B.uni", "type_str": "∀ {α : Type u_1}, True",
+         "skipped": True, "results": []},
+        {"id": "mathlib_6", "declaration": "C.bad", "type_str": "q.cast = 0", "skipped": True, "results": []},
+    ]
+    (run / "anchors.jsonl").write_text("".join(json.dumps(a) + "\n" for a in anchors), encoding="utf-8")
+    results = [{"source_id": "mathlib_6", "declaration": d, "variant": "x"} for d in ("A.ok", "B.uni")]
+    (run / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in results), encoding="utf-8")
+
+    with mock.patch("sys.argv", ["rekey", "--run", str(run)]):
+        assert rekey.main() == 0
+    kept = [json.loads(line) for line in (run / "anchors.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [a["declaration"] for a in kept] == ["A.ok", "C.bad"]
+    assert kept[0]["id"] == prep.anchor_id("A.ok")
+    rows = [json.loads(line) for line in (run / "results.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r["source_id"] for r in rows] == [prep.anchor_id("A.ok")]
+
+    # Second call is a no-op: a still-skipped universe anchor is not dropped again.
+    (run / "anchors.jsonl").write_text(json.dumps(anchors[1]) + "\n", encoding="utf-8")
+    with mock.patch("sys.argv", ["rekey", "--run", str(run)]):
+        assert rekey.main() == 0
+    assert "B.uni" in (run / "anchors.jsonl").read_text(encoding="utf-8")

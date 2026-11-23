@@ -16,6 +16,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Iterator
@@ -29,6 +30,16 @@ def _join_name(value: Any) -> str:
     if isinstance(value, list):
         return ".".join(str(part) for part in value)
     return "" if value is None else str(value)
+
+
+def anchor_id(declaration: str) -> str:
+    """Stable, unique anchor id derived from the declaration name.
+
+    The dataset's ``index`` field is not unique (20,000 theorems share 814
+    values), and every later step (``--resume``, certify, export) groups rows
+    by this id, so it must identify exactly one statement.
+    """
+    return "mathlib_" + hashlib.sha1(declaration.encode("utf-8")).hexdigest()[:16]
 
 
 def anchor_from_record(rec: dict[str, Any], fallback_index: int) -> dict[str, Any] | None:
@@ -45,7 +56,7 @@ def anchor_from_record(rec: dict[str, Any], fallback_index: int) -> dict[str, An
     index = rec.get("index", fallback_index)
     module = _join_name(rec.get("module_name")) or "Mathlib"
     return {
-        "id": f"mathlib_{index}",
+        "id": anchor_id(declaration),
         "declaration": declaration,
         "module": module,
         "raw_signature": type_str,
@@ -67,11 +78,13 @@ def iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
 def write_anchors(records: Iterator[dict[str, Any]], out: Path, limit: int | None) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     n = 0
+    seen: set[str] = set()
     with out.open("w", encoding="utf-8") as fh:
         for i, rec in enumerate(records):
             anchor = anchor_from_record(rec, i)
-            if anchor is None:
+            if anchor is None or anchor["id"] in seen:
                 continue
+            seen.add(anchor["id"])
             fh.write(json.dumps(anchor, ensure_ascii=False) + "\n")
             n += 1
             if limit is not None and n >= limit:
