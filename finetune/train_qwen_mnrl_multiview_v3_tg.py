@@ -899,6 +899,9 @@ def main() -> None:
                     help="'cached' for CachedMNRL (GPU, large batch); 'plain' for MNRL (Mac/CPU compatible)")
 
     # Hard negatives
+    ap.add_argument("--hn_from_extra_only", action="store_true",
+                    help="Build the hard-negative loader only from --extra_train_jsonl concepts "
+                         "(base Mathlib concepts stay hard-negative-free, as in the paper recipe).")
     ap.add_argument("--hard_neg_batch_size", type=int, default=16)
     ap.add_argument("--n_hard_negs", type=int, default=3)
 
@@ -958,7 +961,8 @@ def main() -> None:
     print(f"Concepts used for training: {len(fit_records)} "
           f"(base train {len(train_records)} + extra {len(extra_new)})")
 
-    train_records_with_hn = [r for r in train_records if len(r.nl_hard_negs) >= args.n_hard_negs]
+    hn_pool = extra_new if args.hn_from_extra_only else train_records
+    train_records_with_hn = [r for r in hn_pool if len(r.nl_hard_negs) >= args.n_hard_negs]
     print(f"Train concepts with >= {args.n_hard_negs} NL hard negatives: {len(train_records_with_hn)}")
 
     if not train_records or not dev_records:

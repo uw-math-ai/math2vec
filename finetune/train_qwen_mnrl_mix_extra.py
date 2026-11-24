@@ -24,8 +24,13 @@ import time
 from collections import OrderedDict
 from typing import Iterator, List
 
+import torch
 from datasets import load_dataset
 from sentence_transformers import InputExample, SentenceTransformer, losses
+
+# The cuDNN SDPA backend fails here ("No valid execution plans built");
+# fall back to the flash / memory-efficient kernels.
+torch.backends.cuda.enable_cudnn_sdp(False)
 from torch.utils.data import DataLoader
 
 from train_qwen_mnrl_v2 import (
